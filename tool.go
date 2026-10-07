@@ -1,6 +1,7 @@
 package main
 
 import (
+	"ai-eval/internal/ollama"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,9 +10,9 @@ import (
 )
 
 // listDirTool is the tool schema sent to Ollama.
-var listDirTool = Tool{
+var listDirTool = ollama.Tool{
 	Type: "function",
-	Function: ToolFunction{
+	Function: ollama.ToolFunction{
 		Name:        "list_dir",
 		Description: "List the files and folders in a directory. Folders end with '/'.",
 		Parameters: map[string]any{
