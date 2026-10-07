@@ -9,6 +9,9 @@ import (
 	"testing"
 )
 
+// TestChat checks a chat request goes out and the reply is read back correctly.
+// It asserts the request hits POST /api/chat with streaming off, and the reply's tool calls
+// and token count are decoded.
 func TestChat(t *testing.T) {
 	var got ChatRequest
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -36,6 +39,7 @@ func TestChat(t *testing.T) {
 	}
 }
 
+// TestListModels checks the model names are read from /api/tags in order.
 func TestListModels(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"models":[{"name":"a"},{"name":"b"}]}`))
@@ -52,6 +56,8 @@ func TestListModels(t *testing.T) {
 	}
 }
 
+// TestErrorStatusShowsBody checks a non-200 reply turns into an error.
+// It asserts the server's message (e.g. "model does not support tools") is part of that error.
 func TestErrorStatusShowsBody(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "model does not support tools", http.StatusBadRequest)

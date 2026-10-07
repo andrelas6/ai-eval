@@ -4,6 +4,7 @@ package main
 
 import (
 	"ai-eval/internal/ollama"
+	"ai-eval/internal/target"
 	"ai-eval/internal/tool"
 	"context"
 	"encoding/json"
@@ -22,7 +23,6 @@ import (
 const (
 	systemPrompt = "You are a helpful assistant with access to a `list_dir` tool. The current directory is `.`."
 	userPrompt   = "list the files of this directory"
-	maxTurns     = 4
 )
 
 // Run is one scored attempt of one model.
@@ -63,10 +63,11 @@ func main() {
 
 	var all []Run
 	for _, m := range names {
+		t := target.Ollama{Client: client, Model: m}
 		log.Printf("%s: warm-up", m)
-		warm(client, m, *timeout)
+		warm(t, *timeout)
 		for i := 1; i <= *runs; i++ {
-			r := runOnce(client, m, *dir, *timeout)
+			r := runOnce(t, *dir, *timeout)
 			r.N = i
 			if r.Err == "" {
 				r.Score = Score(r.Answer, expected, known)
@@ -86,53 +87,36 @@ func main() {
 }
 
 // warm loads the model into memory so load time doesn't skew scored runs.
-func warm(c *ollama.Client, model string, timeout time.Duration) {
+func warm(t target.Target, timeout time.Duration) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout*3)
 	defer cancel()
-	if _, err := c.Chat(ctx, ollama.ChatRequest{Model: model, Messages: []ollama.Message{{Role: "user", Content: "hi"}}}); err != nil {
-		log.Printf("%s: warm-up failed: %v", model, err)
+	if _, err := t.Run(ctx, target.Input{Prompt: "hi"}); err != nil {
+		log.Printf("%s: warm-up failed: %v", t.Name(), err)
 	}
 }
 
-func runOnce(c *ollama.Client, model, dir string, timeout time.Duration) (r Run) {
-	r.Model = model
+func runOnce(t target.Target, dir string, timeout time.Duration) Run {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	listDir := tool.ListDir{Root: dir}
-	msgs := []ollama.Message{{Role: "system", Content: systemPrompt}, {Role: "user", Content: userPrompt}}
-	start := time.Now()
-	defer func() { r.Wall = time.Since(start) }()
+	out, err := t.Run(ctx, target.Input{
+		System: systemPrompt,
+		Prompt: userPrompt,
+		Tools:  []tool.Tool{tool.ListDir{Root: dir}},
+	})
 
-	for turn := 0; turn < maxTurns; turn++ {
-		resp, err := c.Chat(ctx, ollama.ChatRequest{Model: model, Messages: msgs, Tools: []ollama.Tool{toOllamaTool(listDir.Spec())}})
-		if err != nil {
-			r.Err = err.Error()
-			return r
-		}
-		msgs = append(msgs, resp.Message)
-
-		if len(resp.Message.ToolCalls) == 0 {
-			r.Answer = resp.Message.Content
-			if resp.EvalDuration > 0 {
-				r.TokPerSec = float64(resp.EvalCount) / (float64(resp.EvalDuration) / 1e9)
-			}
-			return r
-		}
-
-		for _, tc := range resp.Message.ToolCalls {
-			path, _ := tc.Function.Arguments["path"].(string)
-			r.ToolCalls = append(r.ToolCalls, fmt.Sprintf("%s(%q)", tc.Function.Name, path))
-			var out string
-			if tc.Function.Name != "list_dir" {
-				out = "error: unknown tool " + tc.Function.Name
-			} else if out, err = listDir.Call(ctx, tc.Function.Arguments); err != nil {
-				out = "error: " + err.Error()
-			}
-			msgs = append(msgs, ollama.Message{Role: "tool", Content: out, ToolName: tc.Function.Name})
-		}
+	r := Run{Model: t.Name(), Answer: out.Answer, Wall: out.Trace.Wall}
+	if err != nil {
+		r.Err = err.Error()
 	}
-	r.Err = fmt.Sprintf("no final answer after %d turns", maxTurns)
+	for _, c := range out.Trace.ToolCalls() {
+		path, _ := c.Args["path"].(string)
+		r.ToolCalls = append(r.ToolCalls, fmt.Sprintf("%s(%q)", c.Name, path))
+	}
+	if n := len(out.Trace.Turns); n > 0 && out.Trace.Turns[n-1].EvalDuration > 0 {
+		last := out.Trace.Turns[n-1]
+		r.TokPerSec = float64(last.EvalCount) / last.EvalDuration.Seconds()
+	}
 	return r
 }
 
@@ -222,11 +206,4 @@ func splitList(s string) []string {
 		}
 	}
 	return out
-}
-
-func toOllamaTool(s tool.Spec) ollama.Tool {
-	return ollama.Tool{
-		Type:     "function",
-		Function: ollama.ToolFunction{Name: s.Name, Description: s.Description, Parameters: s.Parameters},
-	}
 }

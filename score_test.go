@@ -2,6 +2,9 @@ package main
 
 import "testing"
 
+// TestScore checks how an answer is scored against the fixture.
+// Each row asserts recall (share of real entries named), the count of made-up filenames,
+// and pass: all named, none made up, nested files allowed, and prose like "e.g." ignored.
 func TestScore(t *testing.T) {
 	expected := []string{"README.md", "main.go", "src"}
 	known := []string{"README.md", "main.go", "src", "app.go"}

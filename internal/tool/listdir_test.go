@@ -8,6 +8,8 @@ import (
 
 const sample = "../../testdata/sample"
 
+// TestListDirSpec checks how list_dir describes itself to a model.
+// It asserts the name is "list_dir", there is a description, and the parameters are a JSON schema object.
 func TestListDirSpec(t *testing.T) {
 	spec := ListDir{Root: sample}.Spec()
 	if spec.Name != "list_dir" || spec.Description == "" || spec.Parameters["type"] != "object" {
@@ -15,6 +17,9 @@ func TestListDirSpec(t *testing.T) {
 	}
 }
 
+// TestListDirCall checks list_dir lists the fixture folder.
+// It asserts "." shows files, hidden files and folders (with a trailing "/"), a missing path
+// lists the root, and a subfolder lists only its own files.
 func TestListDirCall(t *testing.T) {
 	ld := ListDir{Root: sample}
 
@@ -37,6 +42,8 @@ func TestListDirCall(t *testing.T) {
 	}
 }
 
+// TestListDirRejectsPathsOutsideRoot checks the model can't read outside the fixture folder.
+// It asserts "..", absolute paths and sneaky paths like "src/../../" all return an error.
 func TestListDirRejectsPathsOutsideRoot(t *testing.T) {
 	ld := ListDir{Root: sample}
 	for _, bad := range []string{"..", "../..", "/etc", "src/../../"} {
