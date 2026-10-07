@@ -1,0 +1,677 @@
+[
+  {
+    "model": "gemma4:31b",
+    "n": 1,
+    "answer": "The files and folders in the current directory are:\n- .env.example\n- README.md\n- config.yaml\n- logo.png\n- main.go\n- notes.txt\n- src/",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 7.837394560667311
+  },
+  {
+    "model": "gemma4:31b",
+    "n": 2,
+    "answer": "The files in the current directory are:\n\n- .env.example\n- README.md\n- config.yaml\n- logo.png\n- main.go\n- notes.txt\n- src/ (directory)",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 7.903769252091275
+  },
+  {
+    "model": "gemma4:31b",
+    "n": 3,
+    "answer": "The files and folders in the current directory are:\n- .env.example\n- README.md\n- config.yaml\n- logo.png\n- main.go\n- notes.txt\n- src/",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 8.921330089213301
+  },
+  {
+    "model": "gemma4:31b",
+    "n": 4,
+    "answer": "The files and folders in the current directory are:\n\n* .env.example\n* README.md\n* config.yaml\n* logo.png\n* main.go\n* notes.txt\n* src/",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 7.437655303313862
+  },
+  {
+    "model": "gemma4:31b",
+    "n": 5,
+    "answer": "The files and folders in the current directory are:\n\n- .env.example\n- README.md\n- config.yaml\n- logo.png\n- main.go\n- notes.txt\n- src/",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 8.303169090123205
+  },
+  {
+    "model": "qwen3-coder:30b",
+    "n": 1,
+    "answer": "Here are the files and folders in the current directory:\n\n- `.env.example`\n- `README.md`\n- `config.yaml`\n- `logo.png`\n- `main.go`\n- `notes.txt`\n- `src/` (folder)",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 35.45536028318906
+  },
+  {
+    "model": "qwen3-coder:30b",
+    "n": 2,
+    "answer": "Here are the files and folders in the current directory:\n\n- `.env.example`\n- `README.md`\n- `config.yaml`\n- `logo.png`\n- `main.go`\n- `notes.txt`\n- `src/` (folder)",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 35.43234547954136
+  },
+  {
+    "model": "qwen3-coder:30b",
+    "n": 3,
+    "answer": "Here are the files and folders in the current directory:\n\n- `.env.example`\n- `README.md`\n- `config.yaml`\n- `logo.png`\n- `main.go`\n- `notes.txt`\n- `src/` (folder)",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 35.44206533673861
+  },
+  {
+    "model": "qwen3-coder:30b",
+    "n": 4,
+    "answer": "Here are the files and folders in the current directory:\n\n- `.env.example`\n- `README.md`\n- `config.yaml`\n- `logo.png`\n- `main.go`\n- `notes.txt`\n- `src/` (folder)",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 35.45337420398312
+  },
+  {
+    "model": "qwen3-coder:30b",
+    "n": 5,
+    "answer": "Here are the files and folders in the current directory:\n\n- `.env.example`\n- `README.md`\n- `config.yaml`\n- `logo.png`\n- `main.go`\n- `notes.txt`\n- `src/` (folder)",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 35.40156347464929
+  },
+  {
+    "model": "qwen3.6:35b",
+    "n": 1,
+    "answer": "Here are the files and folders in the current directory:\n\n- `.env.example`\n- `README.md`\n- `config.yaml`\n- `logo.png`\n- `main.go`\n- `notes.txt`\n- `src/` (directory)",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 55.302647846974835
+  },
+  {
+    "model": "qwen3.6:35b",
+    "n": 2,
+    "answer": "Here are the files and folders in the current directory:\n\n**Files:**\n- `.env.example`\n- `README.md`\n- `config.yaml`\n- `logo.png`\n- `main.go`\n- `notes.txt`\n\n**Folders:**\n- `src/`",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 57.657786178774806
+  },
+  {
+    "model": "qwen3.6:35b",
+    "n": 3,
+    "answer": "Here are the files and folders in the current directory:\n\n- **.env.example**\n- **README.md**\n- **config.yaml**\n- **logo.png**\n- **main.go**\n- **notes.txt**\n- **src/** (directory)",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 55.617671764806104
+  },
+  {
+    "model": "qwen3.6:35b",
+    "n": 4,
+    "answer": "Here are the files and folders in the current directory:\n\n**Files:**\n- `.env.example`\n- `README.md`\n- `config.yaml`\n- `logo.png`\n- `main.go`\n- `notes.txt`\n\n**Folders:**\n- `src/`",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 56.98346509580901
+  },
+  {
+    "model": "qwen3.6:35b",
+    "n": 5,
+    "answer": "Here are the files and folders in the current directory:\n\n**Files:**\n- `.env.example`\n- `README.md`\n- `config.yaml`\n- `logo.png`\n- `main.go`\n- `notes.txt`\n\n**Folders:**\n- `src/`",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 59.242851671121535
+  },
+  {
+    "model": "gpt-oss:20b",
+    "n": 1,
+    "answer": "Here are the files and directories in the current directory:\n\n```\n.env.example\nREADME.md\nconfig.yaml\nlogo.png\nmain.go\nnotes.txt\nsrc/\n```\n\n- `src/` is a directory (the slash indicates that).",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 51.93115300877342
+  },
+  {
+    "model": "gpt-oss:20b",
+    "n": 2,
+    "answer": "Here are the files and directories in the current directory:\n\n- `.env.example`  \n- `README.md`  \n- `config.yaml`  \n- `logo.png`  \n- `main.go`  \n- `notes.txt`  \n- `src/` (directory)",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 51.35923521746284
+  },
+  {
+    "model": "gpt-oss:20b",
+    "n": 3,
+    "answer": "Here are the files and folders in the current directory:\n\n- `.env.example`\n- `README.md`\n- `config.yaml`\n- `logo.png`\n- `main.go`\n- `notes.txt`\n- `src/` (folder)",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 51.554414225127424
+  },
+  {
+    "model": "gpt-oss:20b",
+    "n": 4,
+    "answer": "Here are the items in the current directory:\n\n- `.env.example`  \n- `README.md`  \n- `config.yaml`  \n- `logo.png`  \n- `main.go`  \n- `notes.txt`  \n- `src/` (directory)",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 51.58987317942053
+  },
+  {
+    "model": "gpt-oss:20b",
+    "n": 5,
+    "answer": "Here are the items in the current directory:\n\n```\n.env.example\nREADME.md\nconfig.yaml\nlogo.png\nmain.go\nnotes.txt\nsrc/\n```\n\n`src/` is a subdirectory. Let me know if you'd like to explore its contents or get more details about any of the files!",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 51.87794220640033
+  },
+  {
+    "model": "laguna-xs-2.1:latest",
+    "n": 1,
+    "answer": "**Contents of the current directory:**\n\nFiles:\n- `.env.example`\n- `README.md`\n- `config.yaml`\n- `logo.png`\n- `main.go`\n- `notes.txt`\n\nFolders:\n- `src/`",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 58.596100220258556
+  },
+  {
+    "model": "laguna-xs-2.1:latest",
+    "n": 2,
+    "answer": "The current directory contains the following files and folders:\n\n- `.env.example`\n- `README.md`\n- `config.yaml`\n- `logo.png`\n- `main.go`\n- `notes.txt`\n- `src/` (subdirectory)",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 59.23788896948937
+  },
+  {
+    "model": "laguna-xs-2.1:latest",
+    "n": 3,
+    "answer": "The files in this directory are:\n\n- `.env.example`\n- `README.md`\n- `config.yaml`\n- `logo.png`\n- `main.go`\n- `notes.txt`\n- `src/`",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 59.18770789682399
+  },
+  {
+    "model": "laguna-xs-2.1:latest",
+    "n": 4,
+    "answer": "Here are the files in the current directory:\n\n- `.env.example` - Configuration environment variables example\n- `README.md` - Documentation file\n- `config.yaml` - Configuration file\n- `logo.png` - Image file\n- `main.go` - Go source file\n- `notes.txt` - Text notes file\n- `src/` - Subdirectory (might contain additional source files)",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 57.568866756857894
+  },
+  {
+    "model": "laguna-xs-2.1:latest",
+    "n": 5,
+    "answer": "Here are the files and directories in the current directory:\n\n- `.env.example` - A template environment configuration file\n- `README.md` - Documentation file\n- `config.yaml` - YAML configuration file\n- `logo.png` - Image file\n- `main.go` - Main Go source file\n- `notes.txt` - Text notes file\n- `src/` - A directory (likely containing source code)",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 57.10236637397378
+  },
+  {
+    "model": "nemotron-3.5-lightning:30b",
+    "n": 1,
+    "answer": "Here’s what’s in the current directory:\n\n- `.env.example`\n- `README.md`\n- `config.yaml`\n- `logo.png`\n- `main.go`\n- `notes.txt`\n- `src/` (folder)",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 34.921598881146046
+  },
+  {
+    "model": "nemotron-3.5-lightning:30b",
+    "n": 2,
+    "answer": "Here are the items in the current directory:\n\n- `.env.example`\n- `README.md`\n- `config.yaml`\n- `logo.png`\n- `main.go`\n- `notes.txt`\n- `src/` (folder)",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 36.61015294456364
+  },
+  {
+    "model": "nemotron-3.5-lightning:30b",
+    "n": 3,
+    "answer": "Here’s the contents of the current directory:\n\n```\n.env.example\nREADME.md\nconfig.yaml\nlogo.png\nmain.go\nnotes.txt\nsrc/\n```",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 39.28490754207726
+  },
+  {
+    "model": "nemotron-3.5-lightning:30b",
+    "n": 4,
+    "answer": "Here’s the current directory listing:\n\n```\n.env.example\nREADME.md\nconfig.yaml\nlogo.png\nmain.go\nnotes.txt\nsrc/\n```",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 28.78717290574786
+  },
+  {
+    "model": "nemotron-3.5-lightning:30b",
+    "n": 5,
+    "answer": "Here are the items in the current directory:\n\n- `.env.example`\n- `README.md`\n- `config.yaml`\n- `logo.png`\n- `main.go`\n- `notes.txt`\n- `src/` (folder)",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 37.564706884604576
+  },
+  {
+    "model": "ministral-3:14b",
+    "n": 1,
+    "answer": "Here are the files and folders in the current directory (`.`):\n\n### **Files:**\n- `.env.example`\n- `README.md`\n- `config.yaml`\n- `logo.png`\n- `main.go`\n- `notes.txt`\n\n### **Folders:**\n- `src/` (directory)",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 10.504291791018515
+  },
+  {
+    "model": "ministral-3:14b",
+    "n": 2,
+    "answer": "Here are the files and folders in the current directory (`.`):\n\n### **Files:**\n- `.env.example`\n- `README.md`\n- `config.yaml`\n- `logo.png`\n- `main.go`\n- `notes.txt`\n\n### **Folders:**\n- `src/` (directory)",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 10.497080499486081
+  },
+  {
+    "model": "ministral-3:14b",
+    "n": 3,
+    "answer": "Here are the files and folders in the current directory (`.`):\n\n### **Files:**\n- `.env.example`\n- `README.md`\n- `config.yaml`\n- `logo.png`\n- `main.go`\n- `notes.txt`\n\n### **Folders:**\n- `src/` (directory)",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 10.50469638713728
+  },
+  {
+    "model": "ministral-3:14b",
+    "n": 4,
+    "answer": "Here are the files and folders in the current directory (`.`):\n\n### **Files:**\n- `.env.example`\n- `README.md`\n- `config.yaml`\n- `logo.png`\n- `main.go`\n- `notes.txt`\n\n### **Folders:**\n- `src/` (directory)",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 10.503000969952138
+  },
+  {
+    "model": "ministral-3:14b",
+    "n": 5,
+    "answer": "Here are the files and folders in the current directory (`.`):\n\n### **Files:**\n- `.env.example`\n- `README.md`\n- `config.yaml`\n- `logo.png`\n- `main.go`\n- `notes.txt`\n\n### **Folders:**\n- `src/` (directory)",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 10.505741124881219
+  },
+  {
+    "model": "qwen3.5:9b",
+    "n": 1,
+    "answer": "Here are the files and folders in this directory:\n\n**Files:**\n- `.env.example`\n- `README.md`\n- `config.yaml`\n- `logo.png`\n- `main.go`\n- `notes.txt`\n\n**Folders:**\n- `src/`",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 75.82564434694166
+  },
+  {
+    "model": "qwen3.5:9b",
+    "n": 2,
+    "answer": "Here are the files and folders in the current directory:\n\n**Files:**\n- `.env.example`\n- `README.md`\n- `config.yaml`\n- `logo.png`\n- `main.go`\n- `notes.txt`\n\n**Folders:**\n- `src/`",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 75.92072593045661
+  },
+  {
+    "model": "qwen3.5:9b",
+    "n": 3,
+    "answer": "Here are the files and folders in the current directory:\n\n**Files:**\n- `.env.example` - Environment variable template\n- `README.md` - Documentation file\n- `config.yaml` - Configuration file\n- `logo.png` - Image file (PNG format)\n- `main.go` - Go source code file\n- `notes.txt` - Notes text file\n\n**Folders:**\n- `src/` - Source directory\n\nIs there anything specific you'd like to do with these files?",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 75.81085541470287
+  },
+  {
+    "model": "qwen3.5:9b",
+    "n": 4,
+    "answer": "Here are the files and folders in the current directory:\n\n**Files:**\n- `.env.example`\n- `README.md`\n- `config.yaml`\n- `logo.png`\n- `main.go`\n- `notes.txt`\n\n**Folders:**\n- `src/`",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 76.11914168055841
+  },
+  {
+    "model": "qwen3.5:9b",
+    "n": 5,
+    "answer": "Here are the files and folders in this directory:\n\n**Files:**\n- `.env.example`\n- `README.md`\n- `config.yaml`\n- `logo.png`\n- `main.go`\n- `notes.txt`\n\n**Folders:**\n- `src/`",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 76.0085445449556
+  },
+  {
+    "model": "gemma4:12b",
+    "n": 1,
+    "answer": "The files in the current directory are:\n- .env.example\n- README.md\n- config.yaml\n- logo.png\n- main.go\n- notes.txt\n- src/",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 144.67032485619566
+  },
+  {
+    "model": "gemma4:12b",
+    "n": 2,
+    "answer": "The files and folders in the current directory are:\n- .env.example\n- README.md\n- config.yaml\n- logo.png\n- main.go\n- notes.txt\n- src/",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 135.9742555409509
+  },
+  {
+    "model": "gemma4:12b",
+    "n": 3,
+    "answer": "The files and folders in the current directory are:\n- .env.example\n- README.md\n- config.yaml\n- logo.png\n- main.go\n- notes.txt\n- src/",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 149.55154215188927
+  },
+  {
+    "model": "gemma4:12b",
+    "n": 4,
+    "answer": "The files in the current directory are:\n\n- .env.example\n- README.md\n- config.yaml\n- logo.png\n- main.go\n- notes.txt\n- src/",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 147.4265108727052
+  },
+  {
+    "model": "gemma4:12b",
+    "n": 5,
+    "answer": "The files in the current directory are:\n\n- .env.example\n- README.md\n- config.yaml\n- logo.png\n- main.go\n- notes.txt\n- src/",
+    "tool_calls": [
+      "list_dir(\".\")"
+    ],
+    "score": {
+      "recall": 1,
+      "hallucinated": 0,
+      "pass": true
+    },
+    "wall_ns": 0,
+    "tok_per_sec": 128.06724919263627
+  }
+]
