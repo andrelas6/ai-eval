@@ -1,3 +1,7 @@
+// Package ollama speaks the Ollama HTTP API (/api/chat, /api/tags) and nothing else.
+// Its types mirror the JSON that Ollama expects and returns. It is a model provider,
+// not part of the harness: tools, targets and graders don't import it. Only the
+// Ollama target converts between harness types and these.
 package ollama
 
 import (
