@@ -1,4 +1,4 @@
-package main
+package ollama
 
 import (
 	"bytes"
@@ -42,7 +42,6 @@ type ChatRequest struct {
 	Stream   bool      `json:"stream"`
 }
 
-// ChatResponse durations are in nanoseconds.
 type ChatResponse struct {
 	Message       Message `json:"message"`
 	TotalDuration int64   `json:"total_duration"`
@@ -51,18 +50,18 @@ type ChatResponse struct {
 	EvalDuration  int64   `json:"eval_duration"`
 }
 
-type Ollama struct {
+type Client struct {
 	Host string
 	HTTP *http.Client
 }
 
-func (o *Ollama) ListModels(ctx context.Context) ([]string, error) {
+func (c *Client) ListModels(ctx context.Context) ([]string, error) {
 	var out struct {
 		Models []struct {
 			Name string `json:"name"`
 		} `json:"models"`
 	}
-	if err := o.do(ctx, http.MethodGet, "/api/tags", nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/api/tags", nil, &out); err != nil {
 		return nil, err
 	}
 	names := make([]string, len(out.Models))
@@ -72,13 +71,13 @@ func (o *Ollama) ListModels(ctx context.Context) ([]string, error) {
 	return names, nil
 }
 
-func (o *Ollama) Chat(ctx context.Context, req ChatRequest) (ChatResponse, error) {
+func (c *Client) Chat(ctx context.Context, req ChatRequest) (ChatResponse, error) {
 	var out ChatResponse
-	err := o.do(ctx, http.MethodPost, "/api/chat", req, &out)
+	err := c.do(ctx, http.MethodPost, "/api/chat", req, &out)
 	return out, err
 }
 
-func (o *Ollama) do(ctx context.Context, method, path string, body, out any) error {
+func (c *Client) do(ctx context.Context, method, path string, body, out any) error {
 	var r io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -87,12 +86,12 @@ func (o *Ollama) do(ctx context.Context, method, path string, body, out any) err
 		}
 		r = bytes.NewReader(b)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, o.Host+path, r)
+	req, err := http.NewRequestWithContext(ctx, method, c.Host+path, r)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := o.HTTP.Do(req)
+	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return err
 	}

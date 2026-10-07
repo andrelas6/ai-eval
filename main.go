@@ -3,6 +3,7 @@
 package main
 
 import (
+	"ai-eval/internal/ollama"
 	"context"
 	"encoding/json"
 	"flag"
@@ -48,7 +49,7 @@ func main() {
 		log.Fatalf("read fixture: %v", err)
 	}
 
-	client := &Ollama{Host: *host, HTTP: &http.Client{}}
+	client := &ollama.Client{Host: *host, HTTP: &http.Client{}}
 	names := splitList(*models)
 	if len(names) == 0 {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -84,25 +85,25 @@ func main() {
 }
 
 // warm loads the model into memory so load time doesn't skew scored runs.
-func warm(c *Ollama, model string, timeout time.Duration) {
+func warm(c *ollama.Client, model string, timeout time.Duration) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout*3)
 	defer cancel()
-	if _, err := c.Chat(ctx, ChatRequest{Model: model, Messages: []Message{{Role: "user", Content: "hi"}}}); err != nil {
+	if _, err := c.Chat(ctx, ollama.ChatRequest{Model: model, Messages: []ollama.Message{{Role: "user", Content: "hi"}}}); err != nil {
 		log.Printf("%s: warm-up failed: %v", model, err)
 	}
 }
 
-func runOnce(c *Ollama, model, dir string, timeout time.Duration) (r Run) {
+func runOnce(c *ollama.Client, model, dir string, timeout time.Duration) (r Run) {
 	r.Model = model
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	msgs := []Message{{Role: "system", Content: systemPrompt}, {Role: "user", Content: userPrompt}}
+	msgs := []ollama.Message{{Role: "system", Content: systemPrompt}, {Role: "user", Content: userPrompt}}
 	start := time.Now()
 	defer func() { r.Wall = time.Since(start) }()
 
 	for turn := 0; turn < maxTurns; turn++ {
-		resp, err := c.Chat(ctx, ChatRequest{Model: model, Messages: msgs, Tools: []Tool{listDirTool}})
+		resp, err := c.Chat(ctx, ollama.ChatRequest{Model: model, Messages: msgs, Tools: []ollama.Tool{listDirTool}})
 		if err != nil {
 			r.Err = err.Error()
 			return r
@@ -126,7 +127,7 @@ func runOnce(c *Ollama, model, dir string, timeout time.Duration) (r Run) {
 			} else if out, err = runListDir(dir, path); err != nil {
 				out = "error: " + err.Error()
 			}
-			msgs = append(msgs, Message{Role: "tool", Content: out, ToolName: tc.Function.Name})
+			msgs = append(msgs, ollama.Message{Role: "tool", Content: out, ToolName: tc.Function.Name})
 		}
 	}
 	r.Err = fmt.Sprintf("no final answer after %d turns", maxTurns)
