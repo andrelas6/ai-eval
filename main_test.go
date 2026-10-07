@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+// TestRunOnceRecordsWallTime guards the bug where every run reported 0 seconds.
+// The fake server waits 20ms, so it asserts the recorded run time is at least 20ms.
 func TestRunOnceRecordsWallTime(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(20 * time.Millisecond)
