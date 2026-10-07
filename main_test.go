@@ -2,6 +2,7 @@ package main
 
 import (
 	"ai-eval/internal/ollama"
+	"ai-eval/internal/target"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -16,7 +17,7 @@ func TestRunOnceRecordsWallTime(t *testing.T) {
 	defer srv.Close()
 
 	c := &ollama.Client{Host: srv.URL, HTTP: srv.Client()}
-	r := runOnce(c, "fake", "testdata/sample", time.Second)
+	r := runOnce(target.Ollama{Client: c, Model: "fake"}, "testdata/sample", time.Second)
 
 	if r.Err != "" {
 		t.Fatalf("unexpected error: %s", r.Err)
