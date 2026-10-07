@@ -4,6 +4,7 @@ package main
 
 import (
 	"ai-eval/internal/ollama"
+	"ai-eval/internal/tool"
 	"context"
 	"encoding/json"
 	"flag"
@@ -98,12 +99,13 @@ func runOnce(c *ollama.Client, model, dir string, timeout time.Duration) (r Run)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
+	listDir := tool.ListDir{Root: dir}
 	msgs := []ollama.Message{{Role: "system", Content: systemPrompt}, {Role: "user", Content: userPrompt}}
 	start := time.Now()
 	defer func() { r.Wall = time.Since(start) }()
 
 	for turn := 0; turn < maxTurns; turn++ {
-		resp, err := c.Chat(ctx, ollama.ChatRequest{Model: model, Messages: msgs, Tools: []ollama.Tool{listDirTool}})
+		resp, err := c.Chat(ctx, ollama.ChatRequest{Model: model, Messages: msgs, Tools: []ollama.Tool{toOllamaTool(listDir.Spec())}})
 		if err != nil {
 			r.Err = err.Error()
 			return r
@@ -124,7 +126,7 @@ func runOnce(c *ollama.Client, model, dir string, timeout time.Duration) (r Run)
 			var out string
 			if tc.Function.Name != "list_dir" {
 				out = "error: unknown tool " + tc.Function.Name
-			} else if out, err = runListDir(dir, path); err != nil {
+			} else if out, err = listDir.Call(ctx, tc.Function.Arguments); err != nil {
 				out = "error: " + err.Error()
 			}
 			msgs = append(msgs, ollama.Message{Role: "tool", Content: out, ToolName: tc.Function.Name})
@@ -220,4 +222,11 @@ func splitList(s string) []string {
 		}
 	}
 	return out
+}
+
+func toOllamaTool(s tool.Spec) ollama.Tool {
+	return ollama.Tool{
+		Type:     "function",
+		Function: ollama.ToolFunction{Name: s.Name, Description: s.Description, Parameters: s.Parameters},
+	}
 }

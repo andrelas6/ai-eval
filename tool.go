@@ -1,61 +1,9 @@
 package main
 
 import (
-	"ai-eval/internal/ollama"
-	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
-	"strings"
 )
-
-// listDirTool is the tool schema sent to Ollama.
-var listDirTool = ollama.Tool{
-	Type: "function",
-	Function: ollama.ToolFunction{
-		Name:        "list_dir",
-		Description: "List the files and folders in a directory. Folders end with '/'.",
-		Parameters: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"path": map[string]any{
-					"type":        "string",
-					"description": "Directory to list, relative to the current directory. Use \".\" for the current directory.",
-				},
-			},
-			"required": []string{"path"},
-		},
-	},
-}
-
-// runListDir lists path inside root, one entry per line. Paths that leave root are rejected.
-func runListDir(root, path string) (string, error) {
-	if path == "" {
-		path = "."
-	}
-	if filepath.IsAbs(path) {
-		return "", fmt.Errorf("absolute paths are not allowed: %s", path)
-	}
-	rel := filepath.Clean(path)
-	if rel == ".." || strings.HasPrefix(rel, "../") {
-		return "", fmt.Errorf("path escapes the current directory: %s", path)
-	}
-
-	entries, err := os.ReadDir(filepath.Join(root, rel))
-	if err != nil {
-		return "", err
-	}
-	names := make([]string, 0, len(entries))
-	for _, e := range entries {
-		n := e.Name()
-		if e.IsDir() {
-			n += "/"
-		}
-		names = append(names, n)
-	}
-	sort.Strings(names)
-	return strings.Join(names, "\n"), nil
-}
 
 // fixtureNames returns the top-level entry names and every name in the tree.
 func fixtureNames(root string) (top, all []string, err error) {
