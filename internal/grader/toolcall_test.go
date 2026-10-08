@@ -14,27 +14,31 @@ func withCalls(names ...string) target.Output {
 	return target.Output{Trace: target.Trace{Turns: []target.Turn{turn}}}
 }
 
-// TestToolCalledPassesWhenTheToolWasUsed checks the trace is searched for the tool.
-// It asserts a run that called list_dir (even among other calls) passes with value 1,
-// and the note says how many times it was called.
-func TestToolCalledPassesWhenTheToolWasUsed(t *testing.T) {
-	s := ToolCalled{Tool: "list_dir"}.Grade(withCalls("other", "list_dir", "list_dir"))
-	if s.Grader != "tool_called" || !s.Pass || s.Value != 1 || s.Note != "called list_dir 2x" {
-		t.Errorf("score = %+v", s)
-	}
-}
+// TestToolCalledSearchesTheTrace checks the trace is searched for the tool.
+// Each row asserts pass, value and note: a run that called list_dir (even among other calls)
+// passes with value 1 and says how often; a run that called something else or nothing fails
+// with value 0 and says what was called instead.
+func TestToolCalledSearchesTheTrace(t *testing.T) {
+	g := ToolCalled{Tool: "list_dir"}
 
-// TestToolCalledFailsWhenTheToolWasNotUsed checks a model that answered from memory or
-// called something else.
-// It asserts the run fails with value 0, and the note says what was called instead.
-func TestToolCalledFailsWhenTheToolWasNotUsed(t *testing.T) {
-	s := ToolCalled{Tool: "list_dir"}.Grade(withCalls("rm_rf"))
-	if s.Pass || s.Value != 0 || s.Note != "list_dir never called (called: rm_rf)" {
-		t.Errorf("score = %+v", s)
+	tests := []struct {
+		name  string
+		out   target.Output
+		pass  bool
+		value float64
+		note  string
+	}{
+		{"called among others", withCalls("other", "list_dir", "list_dir"), true, 1, "called list_dir 2x"},
+		{"called something else", withCalls("rm_rf"), false, 0, "list_dir never called (called: rm_rf)"},
+		{"called nothing", target.Output{}, false, 0, "list_dir never called (called: nothing)"},
 	}
 
-	s = ToolCalled{Tool: "list_dir"}.Grade(target.Output{})
-	if s.Pass || s.Note != "list_dir never called (called: nothing)" {
-		t.Errorf("no calls: score = %+v", s)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s := g.Grade(tc.out)
+			if s.Grader != "tool_called" || s.Pass != tc.pass || s.Value != tc.value || s.Note != tc.note {
+				t.Fatalf("got %+v, want pass=%v value=%v note=%q", s, tc.pass, tc.value, tc.note)
+			}
+		})
 	}
 }

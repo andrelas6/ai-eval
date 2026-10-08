@@ -1,6 +1,7 @@
 package grader
 
 import (
+	"slices"
 	"testing"
 
 	"ai-eval/internal/target"
@@ -62,23 +63,14 @@ func TestNewFilesReadsTheFixture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !contains(g.Expected, ".env.example") || !contains(g.Expected, "src") || contains(g.Expected, "app.go") {
+	if !slices.Contains(g.Expected, ".env.example") || !slices.Contains(g.Expected, "src") || slices.Contains(g.Expected, "app.go") {
 		t.Errorf("expected = %v", g.Expected)
 	}
-	if !contains(g.Known, "app.go") {
+	if !slices.Contains(g.Known, "app.go") {
 		t.Errorf("known = %v", g.Known)
 	}
 
 	if _, err := NewFiles("does/not/exist"); err == nil {
 		t.Error("missing fixture should fail")
 	}
-}
-
-func contains(list []string, s string) bool {
-	for _, v := range list {
-		if v == s {
-			return true
-		}
-	}
-	return false
 }
