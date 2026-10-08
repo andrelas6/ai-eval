@@ -3,6 +3,7 @@
 package main
 
 import (
+	"ai-eval/internal/grader"
 	"ai-eval/internal/ollama"
 	"ai-eval/internal/target"
 	"ai-eval/internal/tool"
@@ -27,14 +28,15 @@ const (
 
 // Run is one scored attempt of one model.
 type Run struct {
-	Model     string        `json:"model"`
-	N         int           `json:"n"`
-	Answer    string        `json:"answer"`
-	ToolCalls []string      `json:"tool_calls"`
-	Score     Result        `json:"score"`
-	Wall      time.Duration `json:"wall_ns"`
-	TokPerSec float64       `json:"tok_per_sec"` // final turn only
-	Err       string        `json:"error,omitempty"`
+	Model     string         `json:"model"`
+	N         int            `json:"n"`
+	Answer    string         `json:"answer"`
+	ToolCalls []string       `json:"tool_calls"`
+	Pass      bool           `json:"pass"`
+	Scores    []grader.Score `json:"scores"`
+	Wall      time.Duration  `json:"wall_ns"`
+	TokPerSec float64        `json:"tok_per_sec"` // final turn only
+	Err       string         `json:"error,omitempty"`
 }
 
 func main() {
@@ -45,10 +47,11 @@ func main() {
 	timeout := flag.Duration("timeout", 120*time.Second, "timeout per run")
 	flag.Parse()
 
-	expected, known, err := fixtureNames(*dir)
+	files, err := grader.NewFiles(*dir)
 	if err != nil {
 		log.Fatalf("read fixture: %v", err)
 	}
+	graders := []grader.Grader{files, grader.Latency{}}
 
 	client := &ollama.Client{Host: *host, HTTP: &http.Client{}}
 	names := splitList(*models)
@@ -67,13 +70,10 @@ func main() {
 		log.Printf("%s: warm-up", m)
 		warm(t, *timeout)
 		for i := 1; i <= *runs; i++ {
-			r := runOnce(t, *dir, *timeout)
+			r := runOnce(t, *dir, *timeout, graders)
 			r.N = i
-			if r.Err == "" {
-				r.Score = Score(r.Answer, expected, known)
-			}
-			log.Printf("%s run %d: pass=%v recall=%.2f halluc=%d %.1fs %s",
-				m, i, r.Score.Pass, r.Score.Recall, r.Score.Hallucinated, r.Wall.Seconds(), r.Err)
+			log.Printf("%s run %d: pass=%v recall=%.2f halluc=%.0f %.1fs %s",
+				m, i, r.Pass, r.metric("files", "recall"), r.metric("files", "hallucinated"), r.Wall.Seconds(), r.Err)
 			all = append(all, r)
 		}
 	}
@@ -95,7 +95,7 @@ func warm(t target.Target, timeout time.Duration) {
 	}
 }
 
-func runOnce(t target.Target, dir string, timeout time.Duration) Run {
+func runOnce(t target.Target, dir string, timeout time.Duration, graders []grader.Grader) Run {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -108,6 +108,13 @@ func runOnce(t target.Target, dir string, timeout time.Duration) Run {
 	r := Run{Model: t.Name(), Answer: out.Answer, Wall: out.Trace.Wall}
 	if err != nil {
 		r.Err = err.Error()
+	} else {
+		r.Pass = true
+		for _, g := range graders {
+			s := g.Grade(out)
+			r.Scores = append(r.Scores, s)
+			r.Pass = r.Pass && s.Pass
+		}
 	}
 	for _, c := range out.Trace.ToolCalls() {
 		path, _ := c.Args["path"].(string)
@@ -118,6 +125,15 @@ func runOnce(t target.Target, dir string, timeout time.Duration) Run {
 		r.TokPerSec = float64(last.EvalCount) / last.EvalDuration.Seconds()
 	}
 	return r
+}
+
+func (r Run) metric(grader, name string) float64 {
+	for _, s := range r.Scores {
+		if s.Grader == grader {
+			return s.Metrics[name]
+		}
+	}
+	return 0
 }
 
 func printTable(all []Run) {
@@ -142,14 +158,14 @@ func printTable(all []Run) {
 		rw := row{model: m, n: len(rs)}
 		var walls []time.Duration
 		for _, r := range rs {
-			if r.Score.Pass {
+			if r.Pass {
 				rw.pass++
 			}
 			if len(r.ToolCalls) > 0 {
 				rw.tool++
 			}
-			rw.recall += r.Score.Recall
-			rw.halluc += float64(r.Score.Hallucinated)
+			rw.recall += r.metric("files", "recall")
+			rw.halluc += r.metric("files", "hallucinated")
 			rw.tokps += r.TokPerSec
 			walls = append(walls, r.Wall)
 		}
