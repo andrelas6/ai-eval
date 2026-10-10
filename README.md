@@ -37,7 +37,7 @@ go test ./...
 | `-host` | `http://192.168.2.156:11434` | Ollama base URL |
 | `-models` | *(all)* | Comma-separated model names. Empty means every model from `/api/tags` |
 | `-runs` | `5` | Scored runs per model |
-| `-dir` | `testdata/sample` | Folder the model is asked to list |
+| `-dir` | `fixtures/sample` | Folder the model is asked to list |
 | `-timeout` | `120s` | Max time per run |
 
 Example:
@@ -53,7 +53,7 @@ for each model:
   warm-up call (not scored, loads the model into memory)
   repeat N times:
     send prompt + list_dir tool
-    model calls list_dir(".") → harness runs it inside testdata/sample → sends result back
+    model calls list_dir(".") → harness runs it inside fixtures/sample → sends result back
     model writes final answer → score it
 print table + save results/<timestamp>.json
 ```
@@ -80,7 +80,7 @@ Rows are sorted by PASS, then by p50. Each run's full answer and tool calls are 
 
 ## Changing the test
 
-- **Different folder:** add or remove files in `testdata/sample/`. The expected answer is read from disk on every run.
+- **Different folder:** add or remove files in `fixtures/sample/`. The expected answer is read from disk on every run.
 - **Different prompt:** edit `systemPrompt` and `userPrompt` in `main.go`.
 
 ## Troubleshooting

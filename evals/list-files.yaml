@@ -1,0 +1,11 @@
+# Can the model list a folder by calling list_dir, and how fast?
+id: list-files
+system: You are a helpful assistant with access to a `list_dir` tool. The current directory is `.`.
+prompt: list the files of this directory
+fixture: fixtures/sample
+tools: [list_dir]
+runs: 5
+graders:
+  - files
+  - tool_called: list_dir
+  - latency

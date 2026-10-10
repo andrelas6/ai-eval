@@ -43,7 +43,7 @@ func main() {
 	host := flag.String("host", "http://192.168.2.156:11434", "Ollama base URL")
 	runs := flag.Int("runs", 5, "scored runs per model")
 	models := flag.String("models", "", "comma-separated models (empty = all)")
-	dir := flag.String("dir", "testdata/sample", "fixture directory the model lists")
+	dir := flag.String("dir", "fixtures/sample", "fixture directory the model lists")
 	timeout := flag.Duration("timeout", 120*time.Second, "timeout per run")
 	flag.Parse()
 

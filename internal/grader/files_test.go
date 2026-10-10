@@ -7,7 +7,7 @@ import (
 	"ai-eval/internal/target"
 )
 
-const sample = "../../testdata/sample"
+const sample = "../../fixtures/sample"
 
 // TestFilesScoresAnswers checks how an answer is scored against the files really in the fixture.
 // Each row asserts recall (share of top-level entries named), the count of made-up filenames,
