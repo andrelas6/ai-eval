@@ -20,7 +20,7 @@ func TestRunOnceRecordsWallTime(t *testing.T) {
 	defer srv.Close()
 
 	c := &ollama.Client{Host: srv.URL, HTTP: srv.Client()}
-	r := runOnce(target.Ollama{Client: c, Model: "fake"}, "testdata/sample", time.Second, nil)
+	r := runOnce(target.Ollama{Client: c, Model: "fake"}, "fixtures/sample", time.Second, nil)
 
 	if r.Err != "" {
 		t.Fatalf("unexpected error: %s", r.Err)
@@ -41,7 +41,7 @@ func TestRunOncePassNeedsEveryGrader(t *testing.T) {
 
 	c := &ollama.Client{Host: srv.URL, HTTP: srv.Client()}
 	files := grader.Files{Expected: []string{"README.md", "main.go"}, Known: []string{"README.md", "main.go"}}
-	r := runOnce(target.Ollama{Client: c, Model: "fake"}, "testdata/sample", time.Second, []grader.Grader{files, grader.Latency{}})
+	r := runOnce(target.Ollama{Client: c, Model: "fake"}, "fixtures/sample", time.Second, []grader.Grader{files, grader.Latency{}})
 
 	if len(r.Scores) != 2 || r.Pass {
 		t.Fatalf("pass = %v, scores = %+v", r.Pass, r.Scores)
