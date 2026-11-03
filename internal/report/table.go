@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"ai-eval/internal/eval"
+	"ai-eval/internal/target"
 )
 
 type GraderStats struct {
@@ -18,6 +19,12 @@ type GraderStats struct {
 	Pass     int
 	AvgValue float64
 	Partial  bool
+}
+
+type SkillStats struct {
+	Name    string
+	Offered int
+	Loaded  int
 }
 
 type Row struct {
@@ -30,6 +37,9 @@ type Row struct {
 	P50       time.Duration
 	P95       time.Duration
 	TokPerSec float64
+	Retries   int
+	Cost      float64
+	Skills    []SkillStats
 }
 
 func Summarize(results []eval.Result) []Row {
@@ -48,6 +58,9 @@ func Summarize(results []eval.Result) []Row {
 		}
 		row := &rows[i]
 		row.Runs++
+		row.Retries += max(res.Tries-1, 0)
+		row.Cost += res.Output.Trace.Cost
+		countSkills(row, res.Output.Trace)
 		if res.Err != "" {
 			row.Errors++
 			continue
@@ -86,6 +99,20 @@ func Summarize(results []eval.Result) []Row {
 	return rows
 }
 
+func countSkills(row *Row, trace target.Trace) {
+	for _, name := range trace.SkillsOffered {
+		i := slices.IndexFunc(row.Skills, func(s SkillStats) bool { return s.Name == name })
+		if i < 0 {
+			i = len(row.Skills)
+			row.Skills = append(row.Skills, SkillStats{Name: name})
+		}
+		row.Skills[i].Offered++
+		if slices.Contains(trace.SkillsLoaded, name) {
+			row.Skills[i].Loaded++
+		}
+	}
+}
+
 func WriteTable(w io.Writer, rows []Row) {
 	caseOrder := map[string]int{}
 	graderSet := map[string]bool{}
@@ -113,7 +140,7 @@ func WriteTable(w io.Writer, rows []Row) {
 
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	header := append([]string{"TARGET", "CASE", "PASS", "ERR"}, graders...)
-	header = append(header, "p50(s)", "p95(s)", "tok/s")
+	header = append(header, "p50(s)", "p95(s)", "tok/s", "RETRIES", "COST", "SKILLS")
 	fmt.Fprintln(tw, strings.Join(header, "\t"))
 	for _, r := range sorted {
 		cells := []string{r.Target, r.Case, fmt.Sprintf("%d/%d", r.Pass, r.Runs), fmt.Sprint(r.Errors)}
@@ -123,11 +150,49 @@ func WriteTable(w io.Writer, rows []Row) {
 		cells = append(cells,
 			fmt.Sprintf("%.1f", r.P50.Seconds()),
 			fmt.Sprintf("%.1f", r.P95.Seconds()),
-			fmt.Sprintf("%.0f", r.TokPerSec),
+			speedCell(r),
+			retriesCell(r),
+			costCell(r),
+			skillsCell(r),
 		)
 		fmt.Fprintln(tw, strings.Join(cells, "\t"))
 	}
 	tw.Flush()
+}
+
+func speedCell(r Row) string {
+	if r.TokPerSec == 0 {
+		return "-"
+	}
+	return fmt.Sprintf("%.0f", r.TokPerSec)
+}
+
+func retriesCell(r Row) string {
+	if r.Retries == 0 {
+		return "-"
+	}
+	return fmt.Sprint(r.Retries)
+}
+
+func costCell(r Row) string {
+	if r.Cost == 0 {
+		return "-"
+	}
+	if r.Cost < 0.0001 {
+		return "<$0.0001"
+	}
+	return fmt.Sprintf("$%.4f", r.Cost)
+}
+
+func skillsCell(r Row) string {
+	if len(r.Skills) == 0 {
+		return "-"
+	}
+	parts := make([]string, len(r.Skills))
+	for i, s := range r.Skills {
+		parts[i] = fmt.Sprintf("%s %d/%d", s.Name, s.Loaded, s.Offered)
+	}
+	return strings.Join(parts, ", ")
 }
 
 func graderCell(r Row, name string) string {

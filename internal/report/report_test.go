@@ -2,7 +2,9 @@ package report
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -21,13 +23,14 @@ func result(tgt, cs string, wall time.Duration, pass bool, scores ...grader.Scor
 		Target: tgt,
 		Case:   cs,
 		Pass:   pass,
+		Tries:  1,
 		Scores: scores,
 		Output: target.Output{Trace: target.Trace{Wall: wall, Turns: []target.Turn{turn}}},
 	}
 }
 
 func failed(tgt, cs string) eval.Result {
-	return eval.Result{Target: tgt, Case: cs, Err: "HTTP 500"}
+	return eval.Result{Target: tgt, Case: cs, Err: "HTTP 500", Tries: 1}
 }
 
 func score(name string, value float64, pass bool) grader.Score {
@@ -96,11 +99,11 @@ func TestWriteTable(t *testing.T) {
 		lines = append(lines, strings.Fields(l))
 	}
 	want := [][]string{
-		{"TARGET", "CASE", "PASS", "ERR", "files", "latency", "tool_called", "p50(s)", "p95(s)", "tok/s"},
-		{"fast", "c1", "1/1", "0", "1/1", "1/1", "-", "1.0", "1.0", "50"},
-		{"slow", "c1", "1/1", "0", "1/1", "1/1", "-", "4.0", "4.0", "50"},
-		{"bad", "c1", "0/1", "0", "0/1", "(0.50)", "1/1", "-", "1.0", "1.0", "50"},
-		{"fast", "c2", "1/1", "0", "-", "-", "1/1", "1.0", "1.0", "50"},
+		{"TARGET", "CASE", "PASS", "ERR", "files", "latency", "tool_called", "p50(s)", "p95(s)", "tok/s", "RETRIES", "COST", "SKILLS"},
+		{"fast", "c1", "1/1", "0", "1/1", "1/1", "-", "1.0", "1.0", "50", "-", "-", "-"},
+		{"slow", "c1", "1/1", "0", "1/1", "1/1", "-", "4.0", "4.0", "50", "-", "-", "-"},
+		{"bad", "c1", "0/1", "0", "0/1", "(0.50)", "1/1", "-", "1.0", "1.0", "50", "-", "-", "-"},
+		{"fast", "c2", "1/1", "0", "-", "-", "1/1", "1.0", "1.0", "50", "-", "-", "-"},
 	}
 	if !reflect.DeepEqual(lines, want) {
 		t.Errorf("table:\n%s", buf.String())
@@ -131,5 +134,114 @@ func TestWriteJSON(t *testing.T) {
 	}
 	if !reflect.DeepEqual(back, results) {
 		t.Errorf("round trip:\n got  %+v\n want %+v", back, results)
+	}
+}
+
+func piResult(tries int, cost float64, offered, loaded []string, errText string) eval.Result {
+	return eval.Result{
+		Target: "pi+fin@m",
+		Case:   "c1",
+		Tries:  tries,
+		Err:    errText,
+		Pass:   errText == "",
+		Output: target.Output{Trace: target.Trace{
+			Wall:          time.Second,
+			Cost:          cost,
+			SkillsOffered: offered,
+			SkillsLoaded:  loaded,
+			Turns:         []target.Turn{{}},
+		}},
+	}
+}
+
+// TestSummarizeCountsSkillsTriesAndCost checks the Pi columns behind a row.
+// It asserts retries (tries beyond the first) add up across runs, cost is summed, and each offered skill is counted
+// per run with how many runs loaded it, with runs that errored still counted.
+func TestSummarizeCountsSkillsTriesAndCost(t *testing.T) {
+	fin := []string{"fin"}
+	rows := Summarize([]eval.Result{
+		piResult(1, 0.0005, fin, fin, ""),
+		piResult(2, 0.0007, fin, fin, ""),
+		piResult(3, 0.0003, fin, nil, "skill not loaded: fin"),
+	})
+
+	r := rows[0]
+	if r.Retries != 3 || math.Abs(r.Cost-0.0015) > 1e-12 {
+		t.Errorf("retries = %d, cost = %v", r.Retries, r.Cost)
+	}
+	if len(r.Skills) != 1 || r.Skills[0] != (SkillStats{Name: "fin", Offered: 3, Loaded: 2}) {
+		t.Errorf("skills = %+v", r.Skills)
+	}
+}
+
+// TestWriteTableFillsThePiColumns checks the new cells for a Pi row.
+// It asserts SKILLS shows each skill with loaded/offered runs, RETRIES the retries, COST
+// the sum with four decimals, and tok/s is "-" because Pi has no eval duration.
+func TestWriteTableFillsThePiColumns(t *testing.T) {
+	two := []string{"fin", "tax"}
+	rows := Summarize([]eval.Result{
+		piResult(1, 0.0005, two, two, ""),
+		piResult(2, 0.0007, two, []string{"fin"}, ""),
+		piResult(1, 0.0000, two, two, ""),
+	})
+
+	var buf bytes.Buffer
+	WriteTable(&buf, rows)
+
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	cells := strings.Fields(lines[1])
+	if !strings.HasSuffix(strings.Join(cells, " "), "- 1 $0.0012 fin 3/3, tax 2/3") || cells[6] != "-" {
+		t.Errorf("table:\n%s", buf.String())
+	}
+}
+
+// TestWriteTableShowsDashesForOllamaRows checks rows with no skills or cost.
+// It asserts an Ollama-style row shows "-" for RETRIES, COST and SKILLS.
+func TestWriteTableShowsDashesForOllamaRows(t *testing.T) {
+	var buf bytes.Buffer
+	WriteTable(&buf, Summarize([]eval.Result{result("m1", "c1", time.Second, true, score("files", 1, true))}))
+
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if !strings.HasSuffix(strings.Join(strings.Fields(lines[1]), " "), "50 - - -") {
+		t.Errorf("table:\n%s", buf.String())
+	}
+}
+
+type retryThenPass struct {
+	calls int
+}
+
+func (r *retryThenPass) Name() string { return "pi+fin@m" }
+
+func (r *retryThenPass) Run(ctx context.Context, in target.Input) (target.Output, error) {
+	r.calls++
+	trace := target.Trace{Cost: 0.001, Wall: time.Second}
+	if r.calls <= 2 {
+		return target.Output{Trace: trace}, target.RetryError{Reason: "again"}
+	}
+	return target.Output{Answer: "ok", Trace: trace}, nil
+}
+
+// TestSummarizeCountsTheCostOfRetriedTries checks the runner and report agree on cost.
+// It asserts a run that needed two retries, each try costing 0.001, shows cost 0.003 and 2 retries.
+func TestSummarizeCountsTheCostOfRetriedTries(t *testing.T) {
+	c := eval.Case{ID: "c1", Prompt: "q", Runs: 1}
+	results := eval.Runner{Timeout: time.Second, Retries: 2}.Run(context.Background(), []target.Target{&retryThenPass{}}, []eval.Case{c})
+
+	row := Summarize(results)[0]
+
+	if math.Abs(row.Cost-0.003) > 1e-12 || row.Retries != 2 {
+		t.Errorf("cost = %v, retries = %d", row.Cost, row.Retries)
+	}
+}
+
+// TestWriteTableShowsTinyCosts checks a cost under a hundredth of a cent.
+// It asserts a cost above 0 but under $0.0001 shows as "<$0.0001", not "$0.0000".
+func TestWriteTableShowsTinyCosts(t *testing.T) {
+	var buf bytes.Buffer
+	WriteTable(&buf, []Row{{Target: "t", Case: "c", Runs: 1, Cost: 0.00004}})
+
+	if !strings.Contains(buf.String(), "<$0.0001") {
+		t.Errorf("table:\n%s", buf.String())
 	}
 }

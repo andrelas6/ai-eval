@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -51,10 +52,11 @@ func (f *flakyTarget) Name() string { return f.name }
 
 func (f *flakyTarget) Run(ctx context.Context, in target.Input) (target.Output, error) {
 	f.calls++
+	cost := target.Trace{Cost: 0.001, Tokens: 10}
 	if f.calls <= f.failures {
-		return target.Output{}, f.reason
+		return target.Output{Trace: cost}, f.reason
 	}
-	return target.Output{Answer: "ok"}, nil
+	return target.Output{Answer: "ok", Trace: cost}, nil
 }
 
 type slowThenFineTarget struct {
@@ -397,5 +399,18 @@ func TestRunnerFailsPiWhenTheSkillIsNeverLoaded(t *testing.T) {
 
 	if res.Err != "skill not loaded: fin" || res.Pass || res.Tries != 3 || *calls != 3 {
 		t.Errorf("result = %+v, calls = %d", res, *calls)
+	}
+}
+
+// TestRunnerAddsUpCostAndTokensOverAllTries checks retries are paid for in the result.
+// It asserts two RetryError tries then a pass, each costing 0.001 and 10 tokens, give a
+// result with cost 0.003 and 30 tokens.
+func TestRunnerAddsUpCostAndTokensOverAllTries(t *testing.T) {
+	f := &flakyTarget{name: "f", failures: 2, reason: target.RetryError{Reason: "again"}}
+
+	res := Runner{Timeout: time.Second, Retries: 2}.Run(context.Background(), []target.Target{f}, []Case{testCase("c1", 1, answerIs("ok"))})[0]
+
+	if math.Abs(res.Output.Trace.Cost-0.003) > 1e-12 || res.Output.Trace.Tokens != 30 || res.Tries != 3 {
+		t.Errorf("cost = %v, tokens = %d, tries = %d", res.Output.Trace.Cost, res.Output.Trace.Tokens, res.Tries)
 	}
 }

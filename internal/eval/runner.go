@@ -69,10 +69,16 @@ func (r Runner) warmUp(ctx context.Context, t target.Target) {
 
 func (r Runner) runOnce(ctx context.Context, t target.Target, c Case) Result {
 	var res Result
+	var cost float64
+	var tokens int
 	for try := 1; ; try++ {
 		var retry bool
 		res, retry = r.tryOnce(ctx, t, c)
 		res.Tries = try
+		cost += res.Output.Trace.Cost
+		tokens += res.Output.Trace.Tokens
+		res.Output.Trace.Cost = cost
+		res.Output.Trace.Tokens = tokens
 		if !retry || try > r.Retries || ctx.Err() != nil {
 			break
 		}
