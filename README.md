@@ -85,7 +85,7 @@ for each target                      (pi@…, pi+fin@…)
   for each case                      (revenue, operating-margin, net-profit, debt)
     for n in 1..runs
       runOnce:
-        try 1 ──▶ tryOnce (own -timeout) ──▶ t.Run(Input{Prompt, System, Dir: fixture})
+        try 1 ──▶ tryOnce (own -timeout) ──▶ t.Run(Input{Prompt, System, Dir: fixture})   ← Pi copies the fixture first
           │
           ├─ ok             → run graders → Result{Pass, Scores}            done
           ├─ RetryError     → log "try 1 failed, retrying: skill not loaded: fin"
@@ -102,7 +102,7 @@ With `-agent ollama`, the harness runs the case's tools itself. `list_dir` can o
 
 ## Pi agent
 
-`-agent pi` runs each case with the `pi` command in the case's fixture folder. A target is a model plus a skill set, named `pi@<model>` or `pi+<skills>@<model>`.
+`-agent pi` runs each case with the `pi` command in a temporary copy of the case's fixture folder (see Soft sandbox below). A target is a model plus a skill set, named `pi@<model>` or `pi+<skills>@<model>`.
 
 ```bash
 go run ./cmd/aieval -agent pi -models ollama/gpt-oss:20b -skills none evals/financial-report
@@ -115,6 +115,16 @@ Once `skills/<name>/SKILL.md` exists in the suite, add `-skills <name>` to compa
 - **Skills: offered vs. loaded.** Offering a skill (`--skill <dir>`) only lists its name and description to the model. The model decides whether to read `SKILL.md`. A skill counts as loaded when the model read its `SKILL.md` with `read`, or named it in a `bash` command, and the tool call worked. A baseline (`-skills none`) offers nothing and is never retried.
 - **Retries.** If a skill was offered and not loaded, the try is repeated, up to `-retries` times (2 by default). After that the run is an error: `skill not loaded: <name>`. Each try gets a fresh `-timeout`.
 - **Unix only.** Running `pi` needs process groups, so it works on macOS and Linux only. `pi` is stopped, with anything it started, when a try times out.
+
+### Soft sandbox
+
+- **Where.** Each try runs in `$TMPDIR/aieval-*/work`, a copy of the fixture. On macOS that is under `/var/folders/…/T`, and on Linux under `$TMPDIR` or `/tmp`.
+- **Skills.** Offered skills are copied to `../skills/<name>`, and `--skill` points there.
+- **Cleanup.** The folder is deleted after each try, and the results JSON records its path as `sandbox`.
+- **What it blocks.** `..` paths can't reach the case files, skills, README, earlier results or git.
+- **What it doesn't block.** Absolute paths such as `cat /Users/...`. That would need an OS sandbox.
+- **noexec.** On Linux, a `/tmp` mounted `noexec` stops skill scripts from running as `./x.sh`. `bash x.sh` still works.
+- **Small `/tmp`.** Set `TMPDIR` to a bigger folder.
 
 ## Reading the results
 
