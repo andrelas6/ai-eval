@@ -38,6 +38,7 @@ type Trace struct {
 	SkillsLoaded  []string      `json:"skills_loaded,omitempty"`
 	Tokens        int           `json:"tokens"`
 	Cost          float64       `json:"cost"`
+	Sandbox       string        `json:"sandbox,omitempty"`
 }
 
 type Turn struct {

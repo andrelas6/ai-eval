@@ -14,6 +14,14 @@ type Pi struct {
 	Skills   []string
 	Thinking string
 	Process  func(ctx context.Context, bin string, args []string, dir string) (stdout, stderr []byte, err error)
+	Sandbox  func(fixture string, skills []string) (Box, error)
+}
+
+type Box struct {
+	Root   string
+	Work   string
+	Skills []string
+	Remove func() error
 }
 
 func (p Pi) Name() string {
@@ -27,10 +35,26 @@ func (p Pi) Name() string {
 	return "pi+" + strings.Join(names, ",") + "@" + p.Model
 }
 
-func (p Pi) Run(ctx context.Context, in Input) (Output, error) {
+func (p Pi) Run(ctx context.Context, in Input) (out Output, err error) {
 	provider, model, ok := strings.Cut(p.Model, "/")
 	if !ok || provider == "" || model == "" {
 		return Output{}, fmt.Errorf("model %q must be written provider/model, e.g. ollama/gpt-oss:20b", p.Model)
+	}
+
+	sandbox := p.Sandbox
+	if sandbox == nil {
+		sandbox = makeSandbox
+	}
+	box, err := sandbox(in.Dir, p.Skills)
+	if err != nil {
+		return Output{}, fmt.Errorf("sandbox for fixture %q: %w", in.Dir, err)
+	}
+	if box.Remove != nil {
+		defer func() {
+			if removeErr := box.Remove(); removeErr != nil && err == nil {
+				err = fmt.Errorf("remove sandbox: %w", removeErr)
+			}
+		}()
 	}
 
 	process := p.Process
@@ -41,21 +65,22 @@ func (p Pi) Run(ctx context.Context, in Input) (Output, error) {
 	}
 
 	start := time.Now()
-	stdout, stderr, err := process(ctx, p.Bin, p.args(provider, model, in), in.Dir)
+	stdout, stderr, err := process(ctx, p.Bin, p.args(provider, model, box.Skills, in), box.Work)
 	if err != nil {
-		return Output{Trace: Trace{Wall: time.Since(start), Agent: agent}}, err
+		return Output{Trace: Trace{Wall: time.Since(start), Agent: agent, Sandbox: box.Root}}, err
 	}
-	out, err := parsePiEvents(stdout)
+	out, err = parsePiEvents(stdout)
 	out.Trace.Wall = time.Since(start)
 	out.Trace.Agent = agent
+	out.Trace.Sandbox = box.Root
 	if err != nil {
 		return out, withStderrTail(err, stderr)
 	}
-	out.Trace.SkillsOffered, out.Trace.SkillsLoaded, err = checkSkillsLoaded(out.Trace.ToolCalls(), p.Skills, in.Dir)
+	out.Trace.SkillsOffered, out.Trace.SkillsLoaded, err = checkSkillsLoaded(out.Trace.ToolCalls(), box.Skills, box.Work)
 	return out, err
 }
 
-func (p Pi) args(provider, model string, in Input) []string {
+func (p Pi) args(provider, model string, skills []string, in Input) []string {
 	thinking := p.Thinking
 	if thinking == "" {
 		thinking = "medium"
@@ -65,7 +90,7 @@ func (p Pi) args(provider, model string, in Input) []string {
 		"--no-prompt-templates", "--no-approve", "--tools", "read,bash", "--thinking", thinking,
 		"--provider", provider, "--model", model,
 	}
-	for _, dir := range p.Skills {
+	for _, dir := range skills {
 		args = append(args, "--skill", dir)
 	}
 	if in.System != "" {

@@ -357,6 +357,10 @@ func TestRunnerCountsOneTryWhenItWorks(t *testing.T) {
 	}
 }
 
+func inPlace(fixture string, skills []string) (target.Box, error) {
+	return target.Box{Work: fixture, Skills: skills}, nil
+}
+
 func piProcess(streams ...string) (func(ctx context.Context, bin string, args []string, dir string) ([]byte, []byte, error), *int) {
 	calls := 0
 	return func(ctx context.Context, bin string, args []string, dir string) ([]byte, []byte, error) {
@@ -380,7 +384,7 @@ const (
 // It asserts a Pi run that skips the skill on try 1 and reads it on try 2 passes with Tries 2.
 func TestRunnerRetriesPiUntilTheSkillIsLoaded(t *testing.T) {
 	process, calls := piProcess(piWithoutSkill, piWithSkill)
-	p := target.Pi{Model: "x/m", Skills: []string{"/s/skills/fin"}, Process: process}
+	p := target.Pi{Model: "x/m", Skills: []string{"/s/skills/fin"}, Process: process, Sandbox: inPlace}
 
 	res := Runner{Timeout: time.Second, Retries: 2}.Run(context.Background(), []target.Target{p}, []Case{testCase("c1", 1, answerIs("ok"))})[0]
 
@@ -393,7 +397,7 @@ func TestRunnerRetriesPiUntilTheSkillIsLoaded(t *testing.T) {
 // It asserts a skill that is never read ends as "skill not loaded: fin" after 3 tries.
 func TestRunnerFailsPiWhenTheSkillIsNeverLoaded(t *testing.T) {
 	process, calls := piProcess(piWithoutSkill)
-	p := target.Pi{Model: "x/m", Skills: []string{"/s/skills/fin"}, Process: process}
+	p := target.Pi{Model: "x/m", Skills: []string{"/s/skills/fin"}, Process: process, Sandbox: inPlace}
 
 	res := Runner{Timeout: time.Second, Retries: 2}.Run(context.Background(), []target.Target{p}, []Case{testCase("c1", 1, answerIs("ok"))})[0]
 
