@@ -46,17 +46,59 @@ Give a suite folder (every `*.yaml` in it runs, in name order) or one or more ca
 
 ## How it works
 
-```
-for each model (and skill set):
-  warm-up call for Ollama (not scored, loads the model into memory)
-  for each case, repeated `runs` times:
-    send prompt + tools
-    model calls list_dir(".") -> harness runs it inside the case fixture -> sends result back
-    model writes final answer -> score it
-print table + save results/<timestamp>.json
+### What happens when you run the command
+
+```bash
+go run ./cmd/aieval -agent pi -models ollama/gpt-oss:20b -skills none -skills fin evals/financial-report
 ```
 
-`list_dir` can only see files inside the fixture. Paths like `../` or `/etc` are refused.
+```text
+cmd/aieval/main.go  run()
+ │
+ ├─1 check flags      -models required · pi models must be provider/model
+ │                    -skills only with pi · -retries ≥ 0
+ │
+ ├─2 caseFiles()      evals/financial-report → its *.yaml, sorted, no duplicates
+ │
+ ├─3 skillDirs()      "none" → []          (baseline)
+ │                    "fin"  → [/abs/real/path/evals/financial-report/skills/fin]
+ │                    checks SKILL.md exists, plain names only, symlinks resolved
+ │
+ ├─4 eval.LoadCase()  per yaml: fixture "pdfs" → evals/financial-report/pdfs
+ │                    (fails if missing or empty)
+ │
+ ├─5 targets = models × skill sets
+ │      pi@ollama/gpt-oss:20b         (no skills)
+ │      pi+fin@ollama/gpt-oss:20b     (skills: [fin])
+ │
+ ├─6 eval.Runner.Run(targets, cases)      ◀ the runner loop, below
+ │
+ └─7 report.Summarize → WriteTable (terminal)
+     report.WriteJSON → results/<timestamp>.json
+```
+
+### The runner loop
+
+```text
+for each target                      (pi@…, pi+fin@…)
+  warm-up?  only if the target has WarmUp()      → Ollama yes, Pi no
+  for each case                      (revenue, operating-margin, net-profit, debt)
+    for n in 1..runs
+      runOnce:
+        try 1 ──▶ tryOnce (own -timeout) ──▶ t.Run(Input{Prompt, System, Dir: fixture})
+          │
+          ├─ ok             → run graders → Result{Pass, Scores}            done
+          ├─ RetryError     → log "try 1 failed, retrying: skill not loaded: fin"
+          │                   try 2, try 3 (with -retries 2)
+          │                   still failing → Result{Err: "skill not loaded: fin"}
+          └─ other error    → Result{Err}, no retry
+        cost and tokens are added up over every try
+        Result.Tries = how many tries it took
+```
+
+The runner doesn't know about skills. A `RetryError` from a target just means "try again". The Pi target returns one when an offered skill's `SKILL.md` was never read.
+
+With `-agent ollama`, the harness runs the case's tools itself. `list_dir` can only see files inside the fixture, and paths like `../` or `/etc` are refused.
 
 ## Pi agent
 
