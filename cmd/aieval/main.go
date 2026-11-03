@@ -146,6 +146,9 @@ func (a app) run(ctx context.Context, args []string) error {
 		},
 		OnResult: func(r eval.Result) {
 			fmt.Fprintf(a.stderr, "%s %s run %d: pass=%v %s\n", r.Target, r.Case, r.N, r.Pass, r.Err)
+			if r.Output.Trace.FilesErr != "" {
+				fmt.Fprintf(a.stderr, "warning: %s %s run %d: could not read new files: %s\n", r.Target, r.Case, r.N, r.Output.Trace.FilesErr)
+			}
 			dir := outputDir(r, start)
 			if err := saveOutput(dir, r); err != nil {
 				fmt.Fprintf(a.stderr, "warning: saving output of %s %s run %d: %v\n", r.Target, r.Case, r.N, err)
