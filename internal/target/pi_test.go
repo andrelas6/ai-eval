@@ -3,11 +3,15 @@ package target
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
+	"unicode/utf8"
 )
 
 type processCall struct {
@@ -108,15 +112,6 @@ func TestPiNeedsAProviderInTheModel(t *testing.T) {
 
 	if err == nil || !strings.Contains(err.Error(), "provider/model") || len(calls) != 0 {
 		t.Fatalf("err = %v, calls = %d", err, len(calls))
-	}
-}
-
-// TestPiDefaultProcessIsNotBuiltYet checks the placeholder process.
-// It asserts a Pi with no Process returns the error "pi process not built yet".
-func TestPiDefaultProcessIsNotBuiltYet(t *testing.T) {
-	_, err := Pi{Model: "ollama/m"}.Run(context.Background(), Input{Prompt: "hi"})
-	if err == nil || !strings.Contains(err.Error(), "pi process not built yet") {
-		t.Fatalf("err = %v", err)
 	}
 }
 
@@ -261,5 +256,199 @@ func TestPiKeepsToolResultsItCannotMatch(t *testing.T) {
 	got := out.Trace.Turns[len(out.Trace.Turns)-1].ToolCalls
 	if len(got) != 1 || got[0].Name != "bash" || got[0].Result != "late" {
 		t.Errorf("calls = %+v", got)
+	}
+}
+
+const fakePiScript = `#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "$$" >> "$(dirname "$0")/version-calls"
+  echo "0.99.1"
+  exit 0
+fi
+for last; do :; done
+case "$last" in
+  hang)
+    sleep 30 &
+    echo $! > "$PWD/child.pid"
+    sleep 30
+    ;;
+  fail)
+    i=1
+    while [ $i -le 30 ]; do echo "err line $i" >&2; i=$((i+1)); done
+    exit 3
+    ;;
+  stdin)
+    cat > /dev/null
+    ;;
+  badstream)
+    echo "stderr says boom" >&2
+    echo '{"type":"message_end","message":{"role":"assistant","content":[],"stopReason":"error","errorMessage":"model exploded"}}'
+    echo '{"type":"agent_end","messages":[]}'
+    exit 0
+    ;;
+esac
+echo '{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"cwd='"$PWD"' args='"$*"'"}],"stopReason":"stop"}}'
+echo '{"type":"agent_end","messages":[]}'
+`
+
+func fakePi(t *testing.T) (bin, work string) {
+	t.Helper()
+	dir := t.TempDir()
+	bin = filepath.Join(dir, "pi")
+	if err := os.WriteFile(bin, []byte(fakePiScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	work = filepath.Join(dir, "work")
+	if err := os.Mkdir(work, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	work, err := filepath.EvalSymlinks(work)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return bin, work
+}
+
+// TestPiRunsTheRealProcess checks the default process against a fake pi script.
+// It asserts the script ran in the input's folder, got the pinned flags and the absolute
+// --skill path, and the prompt last, and that the version of pi is recorded in Trace.Agent.
+func TestPiRunsTheRealProcess(t *testing.T) {
+	bin, work := fakePi(t)
+	p := Pi{Bin: bin, Model: "ollama/gpt-oss:20b", Skills: []string{"/abs/skills/fin"}}
+
+	out, err := p.Run(context.Background(), Input{Prompt: "go", Dir: work})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, want := range []string{"cwd=" + work, "--no-skills", "--provider ollama --model gpt-oss:20b", "--skill /abs/skills/fin", "--tools read,bash"} {
+		if !strings.Contains(out.Answer, want) {
+			t.Errorf("answer %q is missing %q", out.Answer, want)
+		}
+	}
+	if !strings.HasSuffix(out.Answer, " go") {
+		t.Errorf("prompt is not last: %q", out.Answer)
+	}
+	if out.Trace.Agent != "pi 0.99.1" {
+		t.Errorf("agent = %q", out.Trace.Agent)
+	}
+}
+
+// TestPiReadsTheVersionOnce checks the version lookup is cached.
+// It asserts two runs on one target start "pi --version" a single time.
+func TestPiReadsTheVersionOnce(t *testing.T) {
+	bin, work := fakePi(t)
+	p := Pi{Bin: bin, Model: "ollama/m"}
+
+	for range 2 {
+		if _, err := p.Run(context.Background(), Input{Prompt: "go", Dir: work}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	b, err := os.ReadFile(filepath.Join(filepath.Dir(bin), "version-calls"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(string(b), "\n"); n != 1 {
+		t.Errorf("version calls = %d", n)
+	}
+}
+
+// TestPiRunSurvivesAnUnreadableVersion checks a missing version doesn't fail the run.
+// It asserts a Bin whose --version fails still returns an answer, with an empty Trace.Agent.
+func TestPiRunSurvivesAnUnreadableVersion(t *testing.T) {
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "pi")
+	script := "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then exit 1; fi\necho '{\"type\":\"message_end\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}],\"stopReason\":\"stop\"}}'\necho '{\"type\":\"agent_end\",\"messages\":[]}'\n"
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := Pi{Bin: bin, Model: "ollama/m"}.Run(context.Background(), Input{Prompt: "go", Dir: dir})
+
+	if err != nil || out.Answer != "ok" || out.Trace.Agent != "" {
+		t.Errorf("out = %+v, err = %v", out, err)
+	}
+}
+
+// TestPiDoesNotHangOnStdin checks pi's stdin is closed.
+// It asserts a script that reads stdin until it ends returns at once.
+func TestPiDoesNotHangOnStdin(t *testing.T) {
+	bin, work := fakePi(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	start := time.Now()
+	_, err := Pi{Bin: bin, Model: "ollama/m"}.Run(ctx, Input{Prompt: "stdin", Dir: work})
+
+	if err != nil || time.Since(start) > 2*time.Second {
+		t.Errorf("err = %v after %v", err, time.Since(start))
+	}
+}
+
+// TestPiNonZeroExitCarriesTheStderrTail checks a crashing pi.
+// It asserts the error mentions the exit and the last stderr lines, and not the first ones.
+func TestPiNonZeroExitCarriesTheStderrTail(t *testing.T) {
+	bin, work := fakePi(t)
+
+	_, err := Pi{Bin: bin, Model: "ollama/m"}.Run(context.Background(), Input{Prompt: "fail", Dir: work})
+
+	if err == nil || !strings.Contains(err.Error(), "exit status 3") || !strings.Contains(err.Error(), "err line 30") {
+		t.Fatalf("err = %v", err)
+	}
+	if strings.Contains(err.Error(), "err line 1\n") || strings.Contains(err.Error(), "err line 2\n") {
+		t.Errorf("err keeps too much: %v", err)
+	}
+}
+
+// TestPiStreamErrorKeepsTheStderrTail checks a failed run that exits 0.
+// It asserts the error holds both the errorMessage from the events and pi's stderr.
+func TestPiStreamErrorKeepsTheStderrTail(t *testing.T) {
+	bin, work := fakePi(t)
+
+	_, err := Pi{Bin: bin, Model: "ollama/m"}.Run(context.Background(), Input{Prompt: "badstream", Dir: work})
+
+	if err == nil || !strings.Contains(err.Error(), "model exploded") || !strings.Contains(err.Error(), "stderr says boom") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+// TestPiStderrTailKeepsWholeLinesAndCharacters checks how stderr is cut.
+// It asserts a long stderr is cut on line boundaries to at most 2KB, and one huge line of
+// multi-byte characters is cut without splitting a character.
+func TestPiStderrTailKeepsWholeLinesAndCharacters(t *testing.T) {
+	var lines []string
+	for i := 1; i <= 15; i++ {
+		lines = append(lines, fmt.Sprintf("line %02d %s", i, strings.Repeat("x", 190)))
+	}
+	tail := stderrTail([]byte(strings.Join(lines, "\n")))
+	if len(tail) > 2048 || !strings.HasPrefix(tail, "line ") || !strings.Contains(tail, "line 15") {
+		t.Errorf("tail starts %q, len %d", tail[:10], len(tail))
+	}
+
+	tail = stderrTail([]byte(strings.Repeat("é", 3000)))
+	if !utf8.ValidString(tail) || len(tail) > 2048 {
+		t.Errorf("valid = %v, len = %d", utf8.ValidString(tail), len(tail))
+	}
+}
+
+// TestPiCachesAFailedVersionLookup checks a broken pi --version is tried once.
+// It asserts two runs against a bin whose --version fails start it for the version only once.
+func TestPiCachesAFailedVersionLookup(t *testing.T) {
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "pi")
+	script := "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo x >> \"" + dir + "/calls\"; exit 1; fi\necho '{\"type\":\"message_end\",\"message\":{\"role\":\"assistant\",\"content\":[],\"stopReason\":\"stop\"}}'\necho '{\"type\":\"agent_end\",\"messages\":[]}'\n"
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if _, err := (Pi{Bin: bin, Model: "ollama/m"}).Run(context.Background(), Input{Prompt: "go", Dir: dir}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, "calls"))
+	if n := strings.Count(string(b), "\n"); n != 1 {
+		t.Errorf("version calls = %d", n)
 	}
 }

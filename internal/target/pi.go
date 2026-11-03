@@ -2,7 +2,6 @@ package target
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -35,19 +34,23 @@ func (p Pi) Run(ctx context.Context, in Input) (Output, error) {
 	}
 
 	process := p.Process
+	agent := ""
 	if process == nil {
-		process = func(context.Context, string, []string, string) ([]byte, []byte, error) {
-			return nil, nil, errors.New("pi process not built yet")
-		}
+		process = execProcess
+		agent = piVersion(ctx, p.Bin)
 	}
 
 	start := time.Now()
-	stdout, _, err := process(ctx, p.Bin, p.args(provider, model, in), in.Dir)
+	stdout, stderr, err := process(ctx, p.Bin, p.args(provider, model, in), in.Dir)
 	if err != nil {
-		return Output{Trace: Trace{Wall: time.Since(start)}}, err
+		return Output{Trace: Trace{Wall: time.Since(start), Agent: agent}}, err
 	}
 	out, err := parsePiEvents(stdout)
 	out.Trace.Wall = time.Since(start)
+	out.Trace.Agent = agent
+	if err != nil {
+		err = withStderrTail(err, stderr)
+	}
 	return out, err
 }
 

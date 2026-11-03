@@ -33,6 +33,7 @@ type Output struct {
 type Trace struct {
 	Turns  []Turn        `json:"turns"`
 	Wall   time.Duration `json:"wall_ns"`
+	Agent  string        `json:"agent,omitempty"`
 	Tokens int           `json:"tokens"`
 	Cost   float64       `json:"cost"`
 }
