@@ -21,6 +21,11 @@ func (o Ollama) Name() string {
 	return o.Model
 }
 
+func (o Ollama) WarmUp(ctx context.Context) error {
+	_, err := o.Run(ctx, Input{Prompt: "hi"})
+	return err
+}
+
 func (o Ollama) Run(ctx context.Context, in Input) (Output, error) {
 	var out Output
 	if o.Model == "" {

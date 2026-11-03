@@ -16,7 +16,14 @@ type Input struct {
 	System string
 	Prompt string
 	Tools  []tool.Tool
+	Dir    string
 }
+
+type RetryError struct {
+	Reason string
+}
+
+func (e RetryError) Error() string { return e.Reason }
 
 type Output struct {
 	Answer string `json:"answer"`
@@ -24,8 +31,13 @@ type Output struct {
 }
 
 type Trace struct {
-	Turns []Turn        `json:"turns"`
-	Wall  time.Duration `json:"wall_ns"`
+	Turns         []Turn        `json:"turns"`
+	Wall          time.Duration `json:"wall_ns"`
+	Agent         string        `json:"agent,omitempty"`
+	SkillsOffered []string      `json:"skills_offered,omitempty"`
+	SkillsLoaded  []string      `json:"skills_loaded,omitempty"`
+	Tokens        int           `json:"tokens"`
+	Cost          float64       `json:"cost"`
 }
 
 type Turn struct {

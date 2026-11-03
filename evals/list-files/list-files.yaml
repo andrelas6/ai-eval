@@ -2,7 +2,7 @@
 id: list-files
 system: You are a helpful assistant with access to a `list_dir` tool. The current directory is `.`.
 prompt: list the files of this directory
-fixture: fixtures/sample
+fixture: fixture
 tools: [list_dir]
 runs: 5
 graders:

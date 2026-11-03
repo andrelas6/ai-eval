@@ -1,0 +1,7 @@
+# How does revenue change from one year to the next, according to the PDFs?
+id: revenue
+prompt: Using the financial report PDFs in the current directory, answer this question. How has revenue changed year over year? Give the revenue for each year and the change between years.
+fixture: pdfs
+runs: 1
+graders:
+  - latency

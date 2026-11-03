@@ -3,6 +3,7 @@ package target
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,7 +14,7 @@ import (
 	"ai-eval/internal/tool"
 )
 
-const sample = "../../fixtures/sample"
+const sample = "../../evals/list-files/fixture"
 
 const (
 	answer      = `{"message":{"role":"assistant","content":"README.md and main.go"},"eval_count":20,"eval_duration":1000000000}`
@@ -196,5 +197,25 @@ func TestOllamaNeedsAModel(t *testing.T) {
 func TestOllamaName(t *testing.T) {
 	if got := (Ollama{Model: "qwen3.5:9b"}).Name(); got != "qwen3.5:9b" {
 		t.Errorf("name = %q", got)
+	}
+}
+
+// TestOllamaWarmUpSendsHi checks the warm-up call that loads the model.
+// It asserts WarmUp sends one chat request with the user message "hi".
+func TestOllamaWarmUpSendsHi(t *testing.T) {
+	var body string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		body = string(b)
+		w.Write([]byte(`{"message":{"role":"assistant","content":"hello"}}`))
+	}))
+	defer srv.Close()
+
+	o := Ollama{Client: &ollama.Client{Host: srv.URL, HTTP: srv.Client()}, Model: "fake"}
+	if err := o.WarmUp(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body, `"content":"hi"`) {
+		t.Errorf("body = %s", body)
 	}
 }

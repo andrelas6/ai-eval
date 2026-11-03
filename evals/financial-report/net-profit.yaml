@@ -1,0 +1,7 @@
+# How does net profit change from one year to the next, according to the PDFs?
+id: net-profit
+prompt: Using the financial report PDFs in the current directory, answer this question. How has net profit changed year over year? Give the net profit for each year and the change between years.
+fixture: pdfs
+runs: 1
+graders:
+  - latency
