@@ -18,10 +18,11 @@ type Pi struct {
 }
 
 type Box struct {
-	Root   string
-	Work   string
-	Skills []string
-	Remove func() error
+	Root     string
+	Work     string
+	Skills   []string
+	Remove   func() error
+	NewFiles func() (map[string][]byte, error)
 }
 
 func (p Pi) Name() string {
@@ -49,13 +50,20 @@ func (p Pi) Run(ctx context.Context, in Input) (out Output, err error) {
 	if err != nil {
 		return Output{}, fmt.Errorf("sandbox for fixture %q: %w", in.Dir, err)
 	}
-	if box.Remove != nil {
-		defer func() {
+	defer func() {
+		if box.NewFiles != nil {
+			files, filesErr := box.NewFiles()
+			out.Files = files
+			if filesErr != nil {
+				out.Trace.FilesErr = filesErr.Error()
+			}
+		}
+		if box.Remove != nil {
 			if removeErr := box.Remove(); removeErr != nil && err == nil {
 				err = fmt.Errorf("remove sandbox: %w", removeErr)
 			}
-		}()
-	}
+		}
+	}()
 
 	process := p.Process
 	agent := ""

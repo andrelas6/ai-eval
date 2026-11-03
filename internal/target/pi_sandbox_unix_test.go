@@ -19,6 +19,16 @@ echo '{"type":"message_end","message":{"role":"assistant","content":[{"type":"te
 echo '{"type":"agent_end","messages":[]}'
 `
 
+const reportPiScript = `#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "0.99.1"
+  exit 0
+fi
+printf 'the report' > report.md
+echo '{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"done"}],"stopReason":"stop"}}'
+echo '{"type":"agent_end","messages":[]}'
+`
+
 func sandboxPi(t *testing.T) string {
 	t.Helper()
 	bin := filepath.Join(t.TempDir(), "pi")
@@ -72,5 +82,29 @@ func TestPiUsesANewSandboxForEachTry(t *testing.T) {
 		if _, err := os.Stat(root); !os.IsNotExist(err) {
 			t.Errorf("root %q still there, err = %v", root, err)
 		}
+	}
+}
+
+// TestPiReturnsFilesThePiScriptWroteEndToEnd checks new files survive the sandbox cleanup.
+// It asserts Output.Files holds report.md with its bytes, the fixture file is not returned, and the root is gone.
+func TestPiReturnsFilesThePiScriptWroteEndToEnd(t *testing.T) {
+	sandboxTempDir(t)
+	fixture := t.TempDir()
+	writeTree(t, fixture, map[string]string{"a.pdf": "pdf"})
+	bin := filepath.Join(t.TempDir(), "pi")
+	if err := os.WriteFile(bin, []byte(reportPiScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := Pi{Bin: bin, Model: "ollama/m"}.Run(context.Background(), Input{Prompt: "q", Dir: fixture})
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Files) != 1 || string(out.Files["report.md"]) != "the report" || out.Trace.FilesErr != "" {
+		t.Errorf("files = %v, FilesErr = %q", out.Files, out.Trace.FilesErr)
+	}
+	if _, err := os.Stat(out.Trace.Sandbox); !os.IsNotExist(err) {
+		t.Errorf("root still there, err = %v", err)
 	}
 }
