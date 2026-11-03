@@ -12,16 +12,16 @@ A small eval for local Ollama models. Each model gets the prompt **"list the fil
 
 ## Run
 
-Quick check with one model and one run:
+Quick check with one model:
 
 ```bash
-go run . -models qwen3.5:9b -runs 1
+go run ./cmd/aieval -models qwen3.5:9b evals/list-files
 ```
 
-Full eval, with every model on the server and 5 runs each:
+Several models, each run through every case in the suite folder:
 
 ```bash
-go run .
+go run ./cmd/aieval -models gpt-oss:20b,qwen3-coder:30b evals/list-files
 ```
 
 Unit tests (scoring and the tool):
@@ -34,45 +34,42 @@ go test ./...
 
 | Flag | Default | What it does |
 |---|---|---|
+| `-agent` | `ollama` | `ollama` or `pi`. `pi` is not built yet |
+| `-models` | *(required)* | Comma-separated model names |
+| `-skills` | *(none)* | A skill set: `none`, or names joined with commas. Repeat the flag for more sets. Names map to `<suite>/skills/<name>/SKILL.md`. Only with `-agent pi` |
+| `-timeout` | `120s` | Max time per try |
+| `-retries` | `2` | Extra tries after a retryable failure (not used yet) |
 | `-host` | `http://192.168.2.156:11434` | Ollama base URL |
-| `-models` | *(all)* | Comma-separated model names. Empty means every model from `/api/tags` |
-| `-runs` | `5` | Scored runs per model |
-| `-dir` | `fixtures/sample` | Folder the model is asked to list |
-| `-timeout` | `120s` | Max time per run |
 
-Example:
-
-```bash
-go run . -models gpt-oss:20b,qwen3-coder:30b -runs 3
-```
+Give a suite folder (every `*.yaml` in it runs, in name order) or one or more case files. A case's `fixture` is resolved relative to the case file's folder.
 
 ## How it works
 
 ```
-for each model:
+for each model (and skill set):
   warm-up call (not scored, loads the model into memory)
-  repeat N times:
-    send prompt + list_dir tool
-    model calls list_dir(".") → harness runs it inside fixtures/sample → sends result back
-    model writes final answer → score it
+  for each case, repeated `runs` times:
+    send prompt + tools
+    model calls list_dir(".") -> harness runs it inside the case fixture -> sends result back
+    model writes final answer -> score it
 print table + save results/<timestamp>.json
 ```
 
-`list_dir` can only see files inside `-dir`. Paths like `../` or `/etc` are refused.
+`list_dir` can only see files inside the fixture. Paths like `../` or `/etc` are refused.
 
 ## Reading the results
 
 ```
-MODEL            PASS  RECALL  HALLUC  TOOL  p50(s)  p95(s)  tok/s
-qwen3-coder:30b  5/5   1.00    0.0     5/5   2.1     2.8     54
+TARGET           CASE        PASS  ERR  files      latency  tool_called  p50(s)  p95(s)  tok/s
+qwen3-coder:30b  list-files  5/5   0    5/5        5/5      5/5          2.1     2.8     54
 ```
 
 | Column | Meaning |
 |---|---|
-| PASS | Runs where every real entry was named and no file was made up |
-| RECALL | Average share of the top-level entries named in the answer (1.00 = all) |
-| HALLUC | Average count of filenames in the answer that don't exist in the folder |
-| TOOL | Runs where the model actually called `list_dir` |
+| TARGET / CASE | The model (or `pi+skills@model`) and the case it ran |
+| PASS | Runs where every grader passed |
+| ERR | Runs that ended in an error |
+| files / latency / tool_called | Runs that passed that grader. Partial scores show their average in brackets |
 | p50 / p95 | Median and 95th-percentile time per run, in seconds |
 | tok/s | Generation speed of the final answer, as reported by Ollama |
 
@@ -80,8 +77,8 @@ Rows are sorted by PASS, then by p50. Each run's full answer and tool calls are 
 
 ## Changing the test
 
-- **Different folder:** add or remove files in `fixtures/sample/`. The expected answer is read from disk on every run.
-- **Different prompt:** edit `systemPrompt` and `userPrompt` in `main.go`.
+- **Different folder:** add or remove files in `evals/list-files/fixture/`. The expected answer is read from disk on every run.
+- **Different prompt:** edit `prompt` and `system` in `evals/list-files/list-files.yaml`.
 
 ## Troubleshooting
 

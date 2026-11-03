@@ -33,7 +33,7 @@ var graderBuilders = map[string]func(c Case, arg any) (grader.Grader, error){
 	"latency":     buildLatency,
 }
 
-func LoadCase(path, root string) (Case, error) {
+func LoadCase(path string) (Case, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return Case{}, err
@@ -43,7 +43,7 @@ func LoadCase(path, root string) (Case, error) {
 		return Case{}, fmt.Errorf("%s: %w", path, err)
 	}
 	id := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
-	c, err := decodeCase(m, id, root)
+	c, err := decodeCase(m, id, filepath.Dir(path))
 	if err != nil {
 		return Case{}, fmt.Errorf("%s: %w", path, err)
 	}

@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-const sample = "../../fixtures/sample"
+const sample = "../../evals/list-files/fixture"
 
 // TestListDirSpec checks how list_dir describes itself to a model.
 // It asserts the name is "list_dir", there is a description, and the parameters are a JSON schema object.

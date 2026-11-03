@@ -13,7 +13,7 @@ import (
 	"ai-eval/internal/tool"
 )
 
-const sample = "../../fixtures/sample"
+const sample = "../../evals/list-files/fixture"
 
 const (
 	answer      = `{"message":{"role":"assistant","content":"README.md and main.go"},"eval_count":20,"eval_duration":1000000000}`

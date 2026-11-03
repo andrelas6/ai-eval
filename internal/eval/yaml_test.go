@@ -10,10 +10,10 @@ import (
 // It asserts nested maps, a block list, an inline list, list items that are plain words,
 // "key: value" pairs or inline maps, and that every value comes back as a string.
 func TestParseYAMLCaseFile(t *testing.T) {
-	src := `# evals/list-files.yaml
+	src := `# evals/list-files/list-files.yaml
 id: list-files
 prompt: list the files of this directory
-fixture: fixtures/sample
+fixture: fixture
 tools: [list_dir]
 runs: 5
 graders:
@@ -24,7 +24,7 @@ graders:
 	want := map[string]any{
 		"id":      "list-files",
 		"prompt":  "list the files of this directory",
-		"fixture": "fixtures/sample",
+		"fixture": "fixture",
 		"tools":   []any{"list_dir"},
 		"runs":    "5",
 		"graders": []any{
