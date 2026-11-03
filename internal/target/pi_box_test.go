@@ -203,3 +203,95 @@ func TestPiKeepsTheRunErrorOverARemoveError(t *testing.T) {
 func passThrough(fixture string, skills []string) (Box, error) {
 	return Box{Work: fixture, Skills: skills}, nil
 }
+
+func boxWithFiles(order *[]string, files map[string][]byte, filesErr error) func(string, []string) (Box, error) {
+	return func(string, []string) (Box, error) {
+		return Box{
+			Work: "/box/work",
+			Remove: func() error {
+				*order = append(*order, "remove")
+				return nil
+			},
+			NewFiles: func() (map[string][]byte, error) {
+				*order = append(*order, "files")
+				return files, filesErr
+			},
+		}, nil
+	}
+}
+
+// TestPiReturnsNewFilesOnEveryPath checks the files are read however the run ends.
+// It asserts Output.Files holds the box files after success, process error, timeout error from process, stream error and a skill retry error.
+func TestPiReturnsNewFilesOnEveryPath(t *testing.T) {
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	tests := []struct {
+		name    string
+		ctx     context.Context
+		stdout  string
+		procErr error
+		skills  []string
+	}{
+		{"success", context.Background(), readsStream(), nil, nil},
+		{"process error", context.Background(), "", errors.New("exit status 2"), nil},
+		{"timeout error from process", cancelled, "", context.DeadlineExceeded, nil},
+		{"stream error", context.Background(), "not json at all\n", nil, nil},
+		{"skill retry error", context.Background(), readsStream(), nil, []string{"/box/skills/a"}},
+	}
+	for _, tc := range tests {
+		var calls []processCall
+		var order []string
+		p := Pi{
+			Model:   "x/m",
+			Skills:  tc.skills,
+			Process: fakeProcess(&calls, []byte(tc.stdout), tc.procErr),
+			Sandbox: boxWithFiles(&order, map[string][]byte{"report.md": []byte("hi")}, nil),
+		}
+
+		out, _ := p.Run(tc.ctx, Input{Prompt: "q"})
+
+		if string(out.Files["report.md"]) != "hi" {
+			t.Errorf("%s: files = %v", tc.name, out.Files)
+		}
+		if !slices.Equal(order, []string{"files", "remove"}) {
+			t.Errorf("%s: order = %v", tc.name, order)
+		}
+	}
+}
+
+// TestPiKeepsRunErrorWhenNewFilesFails checks a failed file read.
+// It asserts the error lands in Trace.FilesErr, the run's own error is unchanged, and no files are returned.
+func TestPiKeepsRunErrorWhenNewFilesFails(t *testing.T) {
+	var calls []processCall
+	var order []string
+	p := Pi{
+		Model:   "x/m",
+		Process: fakeProcess(&calls, nil, errors.New("exit status 2")),
+		Sandbox: boxWithFiles(&order, nil, errors.New("walk failed")),
+	}
+
+	out, err := p.Run(context.Background(), Input{Prompt: "q"})
+
+	if err == nil || err.Error() != "exit status 2" {
+		t.Errorf("err = %v", err)
+	}
+	if out.Trace.FilesErr != "walk failed" || out.Files != nil {
+		t.Errorf("FilesErr = %q, files = %v", out.Trace.FilesErr, out.Files)
+	}
+	if !slices.Equal(order, []string{"files", "remove"}) {
+		t.Errorf("order = %v", order)
+	}
+}
+
+// TestPiAllowsABoxWithoutNewFiles checks a box that has no way to list files.
+// It asserts a nil NewFiles gives no files and no error.
+func TestPiAllowsABoxWithoutNewFiles(t *testing.T) {
+	var calls []processCall
+	p := Pi{Model: "x/m", Process: fakeProcess(&calls, []byte(readsStream()), nil), Sandbox: boxWith(nil)}
+
+	out, err := p.Run(context.Background(), Input{Prompt: "q"})
+
+	if err != nil || out.Files != nil || out.Trace.FilesErr != "" {
+		t.Fatalf("err = %v, files = %v, FilesErr = %q", err, out.Files, out.Trace.FilesErr)
+	}
+}

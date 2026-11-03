@@ -316,3 +316,21 @@ func TestRunContinuesWhenSaveFails(t *testing.T) {
 		t.Errorf("stdout = %q", stdout)
 	}
 }
+
+// TestRunWarnsWhenNewFilesCouldNotBeRead checks a files error from the target is shown.
+// It asserts stderr names the target, case and run, and the eval still saves the answer.
+func TestRunWarnsWhenNewFilesCouldNotBeRead(t *testing.T) {
+	suite := writeSuite(t)
+	tg := &scriptedTarget{name: "fake@m", run: func(int) (target.Output, error) {
+		return target.Output{Answer: "x", Trace: target.Trace{FilesErr: "walk failed"}}, nil
+	}}
+	_, stderr, err := runWith(t, tg, t.TempDir(), "-models", "m", filepath.Join(suite, "a.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "warning: fake@m a run 1: could not read new files: walk failed"
+	if !strings.Contains(stderr, want) {
+		t.Errorf("stderr = %q", stderr)
+	}
+	readFile(t, filepath.Join(suite, "outputs", "20261103-100000", "fake@m", "a", "run-1", "answer.md"))
+}

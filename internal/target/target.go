@@ -40,6 +40,7 @@ type Trace struct {
 	Tokens        int           `json:"tokens"`
 	Cost          float64       `json:"cost"`
 	Sandbox       string        `json:"sandbox,omitempty"`
+	FilesErr      string        `json:"files_error,omitempty"`
 }
 
 type Turn struct {

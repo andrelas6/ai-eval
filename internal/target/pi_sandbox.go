@@ -50,5 +50,11 @@ func makeSandbox(fixture string, skills []string) (box Box, err error) {
 			return Box{}, err
 		}
 	}
-	return Box{Root: root, Work: work, Skills: copies, Remove: func() error { return os.RemoveAll(root) }}, nil
+	return Box{
+		Root:     root,
+		Work:     work,
+		Skills:   copies,
+		Remove:   func() error { return os.RemoveAll(root) },
+		NewFiles: func() (map[string][]byte, error) { return nil, nil },
+	}, nil
 }
