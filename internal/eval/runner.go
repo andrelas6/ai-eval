@@ -10,14 +10,16 @@ import (
 )
 
 type Result struct {
-	Target string         `json:"target"`
-	Case   string         `json:"case"`
-	N      int            `json:"n"`
-	Output target.Output  `json:"output"`
-	Err    string         `json:"error,omitempty"`
-	Tries  int            `json:"tries"`
-	Pass   bool           `json:"pass"`
-	Scores []grader.Score `json:"scores,omitempty"`
+	Target    string         `json:"target"`
+	Case      string         `json:"case"`
+	Dir       string         `json:"suite"`
+	OutputDir string         `json:"output_dir"`
+	N         int            `json:"n"`
+	Output    target.Output  `json:"output"`
+	Err       string         `json:"error,omitempty"`
+	Tries     int            `json:"tries"`
+	Pass      bool           `json:"pass"`
+	Scores    []grader.Score `json:"scores,omitempty"`
 }
 
 type Runner struct {
@@ -94,7 +96,7 @@ func (r Runner) tryOnce(ctx context.Context, t target.Target, c Case) (Result, b
 	defer cancel()
 
 	out, err := t.Run(ctx, target.Input{System: c.System, Prompt: c.Prompt, Tools: c.Tools, Dir: c.Fixture})
-	res := Result{Target: t.Name(), Case: c.ID, Output: out}
+	res := Result{Target: t.Name(), Case: c.ID, Dir: c.Dir, Output: out}
 	if err != nil {
 		res.Err = err.Error()
 		var retry target.RetryError

@@ -26,8 +26,9 @@ type RetryError struct {
 func (e RetryError) Error() string { return e.Reason }
 
 type Output struct {
-	Answer string `json:"answer"`
-	Trace  Trace  `json:"trace"`
+	Answer string            `json:"answer"`
+	Trace  Trace             `json:"trace"`
+	Files  map[string][]byte `json:"-"`
 }
 
 type Trace struct {
