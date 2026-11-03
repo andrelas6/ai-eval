@@ -22,7 +22,7 @@ func TestPiKillsTheWholeProcessGroupAtTheTimeout(t *testing.T) {
 	defer cancel()
 
 	start := time.Now()
-	_, err := Pi{Bin: bin, Model: "ollama/m"}.Run(ctx, Input{Prompt: "hang", Dir: work})
+	_, err := Pi{Bin: bin, Model: "ollama/m", Sandbox: passThrough}.Run(ctx, Input{Prompt: "hang", Dir: work})
 	elapsed := time.Since(start)
 
 	if !errors.Is(err, context.DeadlineExceeded) {

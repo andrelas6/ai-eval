@@ -59,6 +59,7 @@ func TestPiName(t *testing.T) {
 func TestPiBuildsThePinnedArguments(t *testing.T) {
 	var calls []processCall
 	p := Pi{
+		Sandbox: passThrough,
 		Bin:     "pi",
 		Model:   "openrouter/deepseek/deepseek-v4-flash",
 		Skills:  []string{"/s/skills/a", "/s/skills/b"},
@@ -86,7 +87,7 @@ func TestPiBuildsThePinnedArguments(t *testing.T) {
 // and that a chosen thinking level replaces the medium default.
 func TestPiLeavesOutWhatIsNotSet(t *testing.T) {
 	var calls []processCall
-	p := Pi{Bin: "pi", Model: "ollama/gpt-oss:20b", Thinking: "high", Process: fakeProcess(&calls, recording(t, "pi-skill-read.jsonl"), nil)}
+	p := Pi{Sandbox: passThrough, Bin: "pi", Model: "ollama/gpt-oss:20b", Thinking: "high", Process: fakeProcess(&calls, recording(t, "pi-skill-read.jsonl"), nil)}
 
 	if _, err := p.Run(context.Background(), Input{Prompt: "q"}); err != nil {
 		t.Fatal(err)
@@ -106,7 +107,7 @@ func TestPiLeavesOutWhatIsNotSet(t *testing.T) {
 // It asserts a model with no slash is an error and pi is never started.
 func TestPiNeedsAProviderInTheModel(t *testing.T) {
 	var calls []processCall
-	p := Pi{Model: "gpt-oss:20b", Process: fakeProcess(&calls, nil, nil)}
+	p := Pi{Sandbox: passThrough, Model: "gpt-oss:20b", Process: fakeProcess(&calls, nil, nil)}
 
 	_, err := p.Run(context.Background(), Input{Prompt: "q"})
 
@@ -119,7 +120,7 @@ func TestPiNeedsAProviderInTheModel(t *testing.T) {
 // It asserts the process error is returned as it is.
 func TestPiReturnsProcessErrors(t *testing.T) {
 	var calls []processCall
-	p := Pi{Model: "ollama/m", Process: fakeProcess(&calls, nil, errors.New("exit status 2"))}
+	p := Pi{Sandbox: passThrough, Model: "ollama/m", Process: fakeProcess(&calls, nil, errors.New("exit status 2"))}
 
 	_, err := p.Run(context.Background(), Input{Prompt: "q"})
 
@@ -133,7 +134,7 @@ func TestPiReturnsProcessErrors(t *testing.T) {
 // the first turn holds the read call with its path and result, and tokens and cost are summed.
 func TestPiParsesARecordedRun(t *testing.T) {
 	var calls []processCall
-	p := Pi{Model: "openrouter/m", Process: fakeProcess(&calls, recording(t, "pi-skill-read.jsonl"), nil)}
+	p := Pi{Sandbox: passThrough, Model: "openrouter/m", Process: fakeProcess(&calls, recording(t, "pi-skill-read.jsonl"), nil)}
 
 	out, err := p.Run(context.Background(), Input{Prompt: "q"})
 	if err != nil {
@@ -171,7 +172,7 @@ func TestPiParsesARecordedRun(t *testing.T) {
 // It asserts the recorded bad-model run gives an error holding the errorMessage.
 func TestPiTurnsAStopReasonErrorIntoAnError(t *testing.T) {
 	var calls []processCall
-	p := Pi{Model: "openrouter/does-not-exist/x", Process: fakeProcess(&calls, recording(t, "pi-bad-model.jsonl"), nil)}
+	p := Pi{Sandbox: passThrough, Model: "openrouter/does-not-exist/x", Process: fakeProcess(&calls, recording(t, "pi-bad-model.jsonl"), nil)}
 
 	_, err := p.Run(context.Background(), Input{Prompt: "q"})
 
@@ -191,7 +192,7 @@ func TestPiNeedsAnAgentEnd(t *testing.T) {
 		}
 	}
 	var calls []processCall
-	p := Pi{Model: "openrouter/m", Process: fakeProcess(&calls, []byte(strings.Join(kept, "\n")), nil)}
+	p := Pi{Sandbox: passThrough, Model: "openrouter/m", Process: fakeProcess(&calls, []byte(strings.Join(kept, "\n")), nil)}
 
 	_, err := p.Run(context.Background(), Input{Prompt: "q"})
 
@@ -209,7 +210,7 @@ func TestPiKeepsToolErrors(t *testing.T) {
 {"type":"agent_end","messages":[]}
 `
 	var calls []processCall
-	p := Pi{Model: "x/m", Process: fakeProcess(&calls, []byte(stream), nil)}
+	p := Pi{Sandbox: passThrough, Model: "x/m", Process: fakeProcess(&calls, []byte(stream), nil)}
 
 	out, err := p.Run(context.Background(), Input{Prompt: "q"})
 	if err != nil {
@@ -229,7 +230,7 @@ func TestPiTreatsOddStopReasonsAsErrors(t *testing.T) {
 {"type":"agent_end","messages":[]}
 `
 		var calls []processCall
-		p := Pi{Model: "x/m", Process: fakeProcess(&calls, []byte(stream), nil)}
+		p := Pi{Sandbox: passThrough, Model: "x/m", Process: fakeProcess(&calls, []byte(stream), nil)}
 
 		_, err := p.Run(context.Background(), Input{Prompt: "q"})
 
@@ -247,7 +248,7 @@ func TestPiKeepsToolResultsItCannotMatch(t *testing.T) {
 {"type":"agent_end","messages":[]}
 `
 	var calls []processCall
-	p := Pi{Model: "x/m", Process: fakeProcess(&calls, []byte(stream), nil)}
+	p := Pi{Sandbox: passThrough, Model: "x/m", Process: fakeProcess(&calls, []byte(stream), nil)}
 
 	out, err := p.Run(context.Background(), Input{Prompt: "q"})
 	if err != nil {
@@ -320,7 +321,7 @@ func fakePi(t *testing.T) (bin, work string) {
 // It asserts the script ran in the input's folder, got the pinned flags and and the prompt last, and that the version of pi is recorded in Trace.Agent.
 func TestPiRunsTheRealProcess(t *testing.T) {
 	bin, work := fakePi(t)
-	p := Pi{Bin: bin, Model: "ollama/gpt-oss:20b", Skills: []string{"/abs/skills/fin"}}
+	p := Pi{Sandbox: passThrough, Bin: bin, Model: "ollama/gpt-oss:20b", Skills: []string{"/abs/skills/fin"}}
 
 	out, err := p.Run(context.Background(), Input{Prompt: "go", Dir: work})
 	if err != nil {
@@ -483,7 +484,7 @@ func skillStream(tool, argKey, argValue string) []byte {
 func runWithSkills(t *testing.T, stream []byte, dir string, skills ...string) (Output, error) {
 	t.Helper()
 	var calls []processCall
-	p := Pi{Model: "x/m", Skills: skills, Process: fakeProcess(&calls, stream, nil)}
+	p := Pi{Sandbox: passThrough, Model: "x/m", Skills: skills, Process: fakeProcess(&calls, stream, nil)}
 	return p.Run(context.Background(), Input{Prompt: "q", Dir: dir})
 }
 

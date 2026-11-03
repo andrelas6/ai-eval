@@ -199,3 +199,7 @@ func TestPiKeepsTheRunErrorOverARemoveError(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func passThrough(fixture string, skills []string) (Box, error) {
+	return Box{Work: fixture, Skills: skills}, nil
+}

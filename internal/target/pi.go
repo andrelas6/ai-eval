@@ -18,6 +18,7 @@ type Pi struct {
 }
 
 type Box struct {
+	Root   string
 	Work   string
 	Skills []string
 	Remove func() error
@@ -42,7 +43,7 @@ func (p Pi) Run(ctx context.Context, in Input) (out Output, err error) {
 
 	sandbox := p.Sandbox
 	if sandbox == nil {
-		sandbox = passThrough
+		sandbox = makeSandbox
 	}
 	box, err := sandbox(in.Dir, p.Skills)
 	if err != nil {
@@ -66,11 +67,12 @@ func (p Pi) Run(ctx context.Context, in Input) (out Output, err error) {
 	start := time.Now()
 	stdout, stderr, err := process(ctx, p.Bin, p.args(provider, model, box.Skills, in), box.Work)
 	if err != nil {
-		return Output{Trace: Trace{Wall: time.Since(start), Agent: agent}}, err
+		return Output{Trace: Trace{Wall: time.Since(start), Agent: agent, Sandbox: box.Root}}, err
 	}
 	out, err = parsePiEvents(stdout)
 	out.Trace.Wall = time.Since(start)
 	out.Trace.Agent = agent
+	out.Trace.Sandbox = box.Root
 	if err != nil {
 		return out, withStderrTail(err, stderr)
 	}
@@ -95,8 +97,4 @@ func (p Pi) args(provider, model string, skills []string, in Input) []string {
 		args = append(args, "--append-system-prompt", in.System)
 	}
 	return append(args, in.Prompt)
-}
-
-func passThrough(fixture string, skills []string) (Box, error) {
-	return Box{Work: fixture, Skills: skills}, nil
 }
