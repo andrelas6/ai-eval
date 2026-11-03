@@ -58,7 +58,11 @@ func writeFile(t *testing.T, path, content string) {
 
 func writeSuite(t *testing.T) string {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "suite")
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(root, "suite")
 	writeFile(t, filepath.Join(dir, "b.yaml"), "prompt: second\ngraders: [latency]\n")
 	writeFile(t, filepath.Join(dir, "a.yaml"), "prompt: first\ngraders: [latency]\n")
 	writeFile(t, filepath.Join(dir, "notes.txt"), "not a case")
@@ -405,5 +409,23 @@ func TestRunChecksPiModelsHaveAProvider(t *testing.T) {
 	}
 	if _, _, err := execute(t, &fakeFactory{}, "-agent", "ollama", "-models", "gpt-oss:20b", writeSuite(t)); err != nil {
 		t.Errorf("ollama: %v", err)
+	}
+}
+
+// TestRunResolvesSymlinksInSkillDirs checks skill folders are the real paths.
+// It asserts a suite reached through a symlink gives skill dirs with the symlink resolved,
+// so they match the paths pi reports.
+func TestRunResolvesSymlinksInSkillDirs(t *testing.T) {
+	factory := &fakeFactory{}
+	suite := writeSuite(t)
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(suite, link); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := execute(t, factory, "-agent", "pi", "-models", "p/m", "-skills", "x", link); err != nil {
+		t.Fatal(err)
+	}
+	if got := factory.calls[0].skills[0]; got != filepath.Join(suite, "skills", "x") {
+		t.Errorf("skill dir = %q", got)
 	}
 }

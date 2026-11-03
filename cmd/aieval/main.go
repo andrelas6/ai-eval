@@ -218,7 +218,11 @@ func skillDirs(sets skillSets, suite string) ([][]string, error) {
 			if err != nil {
 				return nil, err
 			}
-			dirs = append(dirs, abs)
+			resolved, err := filepath.EvalSymlinks(abs)
+			if err != nil {
+				return nil, err
+			}
+			dirs = append(dirs, resolved)
 		}
 		all = append(all, dirs)
 	}

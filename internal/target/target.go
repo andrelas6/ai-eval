@@ -31,11 +31,13 @@ type Output struct {
 }
 
 type Trace struct {
-	Turns  []Turn        `json:"turns"`
-	Wall   time.Duration `json:"wall_ns"`
-	Agent  string        `json:"agent,omitempty"`
-	Tokens int           `json:"tokens"`
-	Cost   float64       `json:"cost"`
+	Turns         []Turn        `json:"turns"`
+	Wall          time.Duration `json:"wall_ns"`
+	Agent         string        `json:"agent,omitempty"`
+	SkillsOffered []string      `json:"skills_offered,omitempty"`
+	SkillsLoaded  []string      `json:"skills_loaded,omitempty"`
+	Tokens        int           `json:"tokens"`
+	Cost          float64       `json:"cost"`
 }
 
 type Turn struct {

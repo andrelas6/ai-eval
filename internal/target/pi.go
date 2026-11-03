@@ -49,8 +49,9 @@ func (p Pi) Run(ctx context.Context, in Input) (Output, error) {
 	out.Trace.Wall = time.Since(start)
 	out.Trace.Agent = agent
 	if err != nil {
-		err = withStderrTail(err, stderr)
+		return out, withStderrTail(err, stderr)
 	}
+	out.Trace.SkillsOffered, out.Trace.SkillsLoaded, err = checkSkillsLoaded(out.Trace.ToolCalls(), p.Skills, in.Dir)
 	return out, err
 }
 

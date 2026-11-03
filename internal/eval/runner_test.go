@@ -354,3 +354,48 @@ func TestRunnerCountsOneTryWhenItWorks(t *testing.T) {
 		t.Errorf("tries = %d", res.Tries)
 	}
 }
+
+func piProcess(streams ...string) (func(ctx context.Context, bin string, args []string, dir string) ([]byte, []byte, error), *int) {
+	calls := 0
+	return func(ctx context.Context, bin string, args []string, dir string) ([]byte, []byte, error) {
+		i := min(calls, len(streams)-1)
+		calls++
+		return []byte(streams[i]), nil, nil
+	}, &calls
+}
+
+const (
+	piWithoutSkill = `{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"ok"}],"stopReason":"stop"}}
+{"type":"agent_end","messages":[]}
+`
+	piWithSkill = `{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"c1","name":"read","arguments":{"path":"/s/skills/fin/SKILL.md"}}],"stopReason":"toolUse"}}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"ok"}],"stopReason":"stop"}}
+{"type":"agent_end","messages":[]}
+`
+)
+
+// TestRunnerRetriesPiUntilTheSkillIsLoaded checks the skill check works through the runner.
+// It asserts a Pi run that skips the skill on try 1 and reads it on try 2 passes with Tries 2.
+func TestRunnerRetriesPiUntilTheSkillIsLoaded(t *testing.T) {
+	process, calls := piProcess(piWithoutSkill, piWithSkill)
+	p := target.Pi{Model: "x/m", Skills: []string{"/s/skills/fin"}, Process: process}
+
+	res := Runner{Timeout: time.Second, Retries: 2}.Run(context.Background(), []target.Target{p}, []Case{testCase("c1", 1, answerIs("ok"))})[0]
+
+	if res.Err != "" || !res.Pass || res.Tries != 2 || *calls != 2 {
+		t.Errorf("result = %+v, calls = %d", res, *calls)
+	}
+}
+
+// TestRunnerFailsPiWhenTheSkillIsNeverLoaded checks the retry limit for skills.
+// It asserts a skill that is never read ends as "skill not loaded: fin" after 3 tries.
+func TestRunnerFailsPiWhenTheSkillIsNeverLoaded(t *testing.T) {
+	process, calls := piProcess(piWithoutSkill)
+	p := target.Pi{Model: "x/m", Skills: []string{"/s/skills/fin"}, Process: process}
+
+	res := Runner{Timeout: time.Second, Retries: 2}.Run(context.Background(), []target.Target{p}, []Case{testCase("c1", 1, answerIs("ok"))})[0]
+
+	if res.Err != "skill not loaded: fin" || res.Pass || res.Tries != 3 || *calls != 3 {
+		t.Errorf("result = %+v, calls = %d", res, *calls)
+	}
+}

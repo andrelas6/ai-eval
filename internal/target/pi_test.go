@@ -62,7 +62,7 @@ func TestPiBuildsThePinnedArguments(t *testing.T) {
 		Bin:     "pi",
 		Model:   "openrouter/deepseek/deepseek-v4-flash",
 		Skills:  []string{"/s/skills/a", "/s/skills/b"},
-		Process: fakeProcess(&calls, recording(t, "pi-skill-read.jsonl"), nil),
+		Process: fakeProcess(&calls, []byte(readsStream("/s/skills/a/SKILL.md", "/s/skills/b/SKILL.md")), nil),
 	}
 
 	if _, err := p.Run(context.Background(), Input{System: "be brief", Prompt: "question?", Dir: "/work"}); err != nil {
@@ -287,6 +287,13 @@ case "$last" in
     exit 0
     ;;
 esac
+prev=""
+for arg; do
+  if [ "$prev" = "--skill" ]; then
+    echo '{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"r","name":"read","arguments":{"path":"'"$arg"'/SKILL.md"}}],"stopReason":"toolUse"}}'
+  fi
+  prev="$arg"
+done
 echo '{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"cwd='"$PWD"' args='"$*"'"}],"stopReason":"stop"}}'
 echo '{"type":"agent_end","messages":[]}'
 `
@@ -310,8 +317,7 @@ func fakePi(t *testing.T) (bin, work string) {
 }
 
 // TestPiRunsTheRealProcess checks the default process against a fake pi script.
-// It asserts the script ran in the input's folder, got the pinned flags and the absolute
-// --skill path, and the prompt last, and that the version of pi is recorded in Trace.Agent.
+// It asserts the script ran in the input's folder, got the pinned flags and and the prompt last, and that the version of pi is recorded in Trace.Agent.
 func TestPiRunsTheRealProcess(t *testing.T) {
 	bin, work := fakePi(t)
 	p := Pi{Bin: bin, Model: "ollama/gpt-oss:20b", Skills: []string{"/abs/skills/fin"}}
@@ -328,6 +334,9 @@ func TestPiRunsTheRealProcess(t *testing.T) {
 	}
 	if !strings.HasSuffix(out.Answer, " go") {
 		t.Errorf("prompt is not last: %q", out.Answer)
+	}
+	if !slices.Equal(out.Trace.SkillsLoaded, []string{"fin"}) {
+		t.Errorf("loaded = %v", out.Trace.SkillsLoaded)
 	}
 	if out.Trace.Agent != "pi 0.99.1" {
 		t.Errorf("agent = %q", out.Trace.Agent)
@@ -450,5 +459,139 @@ func TestPiCachesAFailedVersionLookup(t *testing.T) {
 	b, _ := os.ReadFile(filepath.Join(dir, "calls"))
 	if n := strings.Count(string(b), "\n"); n != 1 {
 		t.Errorf("version calls = %d", n)
+	}
+}
+
+func readsStream(paths ...string) string {
+	var b strings.Builder
+	for _, p := range paths {
+		b.WriteString(`{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"` + p + `","name":"read","arguments":{"path":"` + p + `"}}],"stopReason":"toolUse"}}` + "\n")
+	}
+	b.WriteString(`{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"done"}],"stopReason":"stop"}}` + "\n")
+	b.WriteString(`{"type":"agent_end","messages":[]}` + "\n")
+	return b.String()
+}
+
+func skillStream(tool, argKey, argValue string) []byte {
+	return []byte(`{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"c1","name":"` + tool + `","arguments":{"` + argKey + `":"` + argValue + `"}}],"stopReason":"toolUse"}}
+{"type":"tool_execution_end","toolCallId":"c1","toolName":"` + tool + `","result":{"content":[{"type":"text","text":"ok"}]},"isError":false}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"done"}],"stopReason":"stop"}}
+{"type":"agent_end","messages":[]}
+`)
+}
+
+func runWithSkills(t *testing.T, stream []byte, dir string, skills ...string) (Output, error) {
+	t.Helper()
+	var calls []processCall
+	p := Pi{Model: "x/m", Skills: skills, Process: fakeProcess(&calls, stream, nil)}
+	return p.Run(context.Background(), Input{Prompt: "q", Dir: dir})
+}
+
+// TestPiCountsASkillReadAsLoaded checks the real recording where pi read a SKILL.md.
+// It asserts the offered skill is listed as offered and loaded, and the run has no error.
+func TestPiCountsASkillReadAsLoaded(t *testing.T) {
+	out, err := runWithSkills(t, recording(t, "pi-skill-read.jsonl"), "/work", "/tmp/pitest/skills/margin-calc")
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"margin-calc"}
+	if !slices.Equal(out.Trace.SkillsOffered, want) || !slices.Equal(out.Trace.SkillsLoaded, want) {
+		t.Errorf("offered = %v, loaded = %v", out.Trace.SkillsOffered, out.Trace.SkillsLoaded)
+	}
+}
+
+// TestPiAsksForARetryWhenTheSkillWasNotRead checks a skill that was offered but not loaded.
+// It asserts the recording with a different skill dir gives a RetryError value, the output is
+// still returned, and nothing is listed as loaded.
+func TestPiAsksForARetryWhenTheSkillWasNotRead(t *testing.T) {
+	out, err := runWithSkills(t, recording(t, "pi-skill-read.jsonl"), "/work", "/tmp/pitest/skills/other")
+
+	retry, ok := err.(RetryError)
+	if !ok || retry.Reason != "skill not loaded: other" {
+		t.Fatalf("err = %#v", err)
+	}
+	if out.Answer == "" || len(out.Trace.SkillsLoaded) != 0 || !slices.Equal(out.Trace.SkillsOffered, []string{"other"}) {
+		t.Errorf("out = %+v", out)
+	}
+}
+
+// TestPiNamesOnlyTheMissingSkills checks the reason with two skills offered.
+// It asserts one loaded and one not gives a RetryError naming just the missing one, and
+// both missing are joined with a comma.
+func TestPiNamesOnlyTheMissingSkills(t *testing.T) {
+	stream := recording(t, "pi-skill-read.jsonl")
+
+	out, err := runWithSkills(t, stream, "/work", "/tmp/pitest/skills/margin-calc", "/tmp/pitest/skills/other")
+	if retry, ok := err.(RetryError); !ok || retry.Reason != "skill not loaded: other" {
+		t.Fatalf("err = %#v", err)
+	}
+	if !slices.Equal(out.Trace.SkillsLoaded, []string{"margin-calc"}) {
+		t.Errorf("loaded = %v", out.Trace.SkillsLoaded)
+	}
+
+	_, err = runWithSkills(t, stream, "/work", "/s/a", "/s/b")
+	if retry, ok := err.(RetryError); !ok || retry.Reason != "skill not loaded: a, b" {
+		t.Errorf("err = %#v", err)
+	}
+}
+
+// TestPiCountsABashCatAsLoaded checks a skill loaded through bash.
+// It asserts a bash command that contains <dir>/SKILL.md counts.
+func TestPiCountsABashCatAsLoaded(t *testing.T) {
+	out, err := runWithSkills(t, skillStream("bash", "command", "cat /s/skills/fin/SKILL.md"), "/work", "/s/skills/fin")
+
+	if err != nil || !slices.Equal(out.Trace.SkillsLoaded, []string{"fin"}) {
+		t.Errorf("err = %v, loaded = %v", err, out.Trace.SkillsLoaded)
+	}
+}
+
+// TestPiResolvesReadPaths checks how a read path is matched.
+// It asserts a path with extra dots and slashes counts, a path relative to the input folder
+// counts, and a read of another skill's SKILL.md or of a file inside the folder does not.
+func TestPiResolvesReadPaths(t *testing.T) {
+	tests := []struct {
+		name   string
+		path   string
+		loaded bool
+	}{
+		{"unclean", "/s/skills/../skills/fin//SKILL.md", true},
+		{"relative to the work folder", "../skills/fin/SKILL.md", true},
+		{"other skill", "/s/skills/other/SKILL.md", false},
+		{"other file", "/s/skills/fin/notes.md", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := runWithSkills(t, skillStream("read", "path", tc.path), "/s/work", "/s/skills/fin")
+			if got := len(out.Trace.SkillsLoaded) == 1; got != tc.loaded {
+				t.Errorf("loaded = %v, want %v", out.Trace.SkillsLoaded, tc.loaded)
+			}
+		})
+	}
+}
+
+// TestPiBaselineNeverRetries checks a run with no skills offered.
+// It asserts no RetryError and no offered or loaded skills.
+func TestPiBaselineNeverRetries(t *testing.T) {
+	out, err := runWithSkills(t, recording(t, "pi-skill-read.jsonl"), "/work")
+
+	if err != nil || len(out.Trace.SkillsOffered) != 0 || len(out.Trace.SkillsLoaded) != 0 {
+		t.Errorf("out = %+v, err = %v", out.Trace, err)
+	}
+}
+
+// TestPiIgnoresAFailedSkillRead checks a read that errored.
+// It asserts a matching read whose tool result is an error does not count as loaded, and the
+// run is a RetryError.
+func TestPiIgnoresAFailedSkillRead(t *testing.T) {
+	stream := strings.Replace(string(skillStream("read", "path", "/s/skills/fin/SKILL.md")), `"isError":false`, `"isError":true`, 1)
+
+	out, err := runWithSkills(t, []byte(stream), "/work", "/s/skills/fin")
+
+	if retry, ok := err.(RetryError); !ok || retry.Reason != "skill not loaded: fin" {
+		t.Fatalf("err = %#v", err)
+	}
+	if len(out.Trace.SkillsLoaded) != 0 {
+		t.Errorf("loaded = %v", out.Trace.SkillsLoaded)
 	}
 }
