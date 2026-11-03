@@ -11,7 +11,7 @@ Each question is one case file. The prompts are the same except for the metric.
 3. `net-profit.yaml`: How has net profit changed year over year?
 4. `debt.yaml`: How has debt changed year over year?
 
-Each prompt asks for the number for every year and the change between years. Grading is latency only for now. Read the answers in `results/<timestamp>.json` to judge them.
+Each prompt asks for the number for every year and the change between years. Grading is latency only for now. Read the answers in `results/<timestamp>.json` to judge them. Each run's answer, and any report files Pi wrote, are also saved in `outputs/<timestamp>/<target>/<case>/run-<n>/` here (`answer.md` and `work/`).
 
 ## PDFs
 
