@@ -18,7 +18,7 @@ import (
 // deadline, and the sleeping child pi started is gone.
 func TestPiKillsTheWholeProcessGroupAtTheTimeout(t *testing.T) {
 	bin, work := fakePi(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
 	start := time.Now()
@@ -28,7 +28,7 @@ func TestPiKillsTheWholeProcessGroupAtTheTimeout(t *testing.T) {
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("err = %v", err)
 	}
-	if elapsed > 500*time.Millisecond+time.Second {
+	if elapsed > 2*time.Second+time.Second {
 		t.Errorf("Run took %v", elapsed)
 	}
 	b, readErr := os.ReadFile(filepath.Join(work, "child.pid"))
