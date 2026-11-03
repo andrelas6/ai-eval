@@ -91,7 +91,14 @@ func decodeCase(m map[string]any, defaultID, root string) (Case, error) {
 	if fixture != "" {
 		c.Fixture = filepath.Join(root, fixture)
 		if info, err := os.Stat(c.Fixture); err != nil || !info.IsDir() {
-			return c, fmt.Errorf("fixture %q not found", fixture)
+			return c, fmt.Errorf("fixture %q not found", c.Fixture)
+		}
+		found, err := hasFiles(c.Fixture)
+		if err != nil {
+			return c, fmt.Errorf("fixture %q: %v", c.Fixture, err)
+		}
+		if !found {
+			return c, fmt.Errorf("fixture %q is empty", c.Fixture)
 		}
 	}
 
@@ -129,6 +136,14 @@ func decodeCase(m map[string]any, defaultID, root string) (Case, error) {
 		c.Graders = append(c.Graders, g)
 	}
 	return c, nil
+}
+
+func hasFiles(dir string) (bool, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false, err
+	}
+	return slices.ContainsFunc(entries, func(e os.DirEntry) bool { return !strings.HasPrefix(e.Name(), ".") }), nil
 }
 
 func buildGrader(c Case, item any) (grader.Grader, error) {

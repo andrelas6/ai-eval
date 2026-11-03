@@ -1,1 +1,3 @@
 .DS_Store
+evals/*/pdfs/*
+!evals/*/pdfs/.gitkeep

@@ -153,7 +153,8 @@ func TestDecodeCaseErrors(t *testing.T) {
 		{"tool_called for a tool not offered", "prompt: hi\ngraders:\n  - tool_called: list_dir", `tool_called: the case doesn't offer "list_dir" in tools`},
 		{"files without fixture", "prompt: hi\ngraders: [files]", `files: needs a "fixture"`},
 		{"tools without fixture", "prompt: hi\ntools: [list_dir]\ngraders: [latency]", `tools need a "fixture"`},
-		{"fixture missing on disk", "prompt: hi\nfixture: nope\ngraders: [latency]", `fixture "nope" not found`},
+		{"fixture is a file", "prompt: hi\nfixture: list-files.yaml\ngraders: [latency]", `fixture "../../evals/list-files/list-files.yaml" not found`},
+		{"fixture missing on disk", "prompt: hi\nfixture: nope\ngraders: [latency]", `fixture "../../evals/list-files/nope" not found`},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -162,5 +163,88 @@ func TestDecodeCaseErrors(t *testing.T) {
 				t.Fatalf("err = %v, want it to contain %q", err, tc.want)
 			}
 		})
+	}
+}
+
+// TestLoadCaseRejectsAnEmptyFixture checks a fixture folder with nothing to work on.
+// It asserts a folder that holds only dotfiles gives fixture "<resolved path>" is empty, and
+// adding a real file makes it load.
+func TestLoadCaseRejectsAnEmptyFixture(t *testing.T) {
+	dir := t.TempDir()
+	pdfs := filepath.Join(dir, "pdfs")
+	os.Mkdir(pdfs, 0o755)
+	os.WriteFile(filepath.Join(pdfs, ".gitkeep"), nil, 0o644)
+	path := filepath.Join(dir, "c.yaml")
+	os.WriteFile(path, []byte("prompt: hi\nfixture: pdfs\ngraders: [latency]\n"), 0o644)
+
+	_, err := LoadCase(path)
+	if err == nil || !strings.Contains(err.Error(), `fixture "`+pdfs+`" is empty`) {
+		t.Fatalf("err = %v", err)
+	}
+
+	os.WriteFile(filepath.Join(pdfs, "report.pdf"), []byte("x"), 0o644)
+	if _, err := LoadCase(path); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestFinancialReportCasesLoad checks the four shipped financial-report cases.
+// It asserts each file loads from a temp copy of the suite that has a dummy PDF, so the test
+// doesn't need the real PDFs, with fixture pdfs, one run, the latency grader, and a prompt
+// that differs only in the metric.
+func TestFinancialReportCasesLoad(t *testing.T) {
+	suite := t.TempDir()
+	os.Mkdir(filepath.Join(suite, "pdfs"), 0o755)
+	os.WriteFile(filepath.Join(suite, "pdfs", "report-2024.pdf"), []byte("x"), 0o644)
+
+	ids := map[string]string{
+		"revenue.yaml":          "revenue",
+		"operating-margin.yaml": "operating margin",
+		"net-profit.yaml":       "net profit",
+		"debt.yaml":             "debt",
+	}
+	for file, metric := range ids {
+		b, err := os.ReadFile(filepath.Join("../../evals/financial-report", file))
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(suite, file)
+		os.WriteFile(path, b, 0o644)
+
+		c, err := LoadCase(path)
+		if err != nil {
+			t.Fatalf("%s: %v", file, err)
+		}
+		if c.ID != strings.TrimSuffix(file, ".yaml") || c.Runs != 1 || filepath.Base(c.Fixture) != "pdfs" {
+			t.Errorf("%s: case = %+v", file, c)
+		}
+		if got := graderNames(c); !slices.Equal(got, []string{"latency"}) {
+			t.Errorf("%s: graders = %v", file, got)
+		}
+		if !strings.Contains(c.Prompt, "How has "+metric+" changed year over year?") {
+			t.Errorf("%s: prompt = %q", file, c.Prompt)
+		}
+	}
+}
+
+// TestLoadCaseReportsAnUnreadableFixture checks a fixture folder that can't be read.
+// It asserts the read error is reported with the path instead of saying the folder is empty.
+func TestLoadCaseReportsAnUnreadableFixture(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can read any folder")
+	}
+	dir := t.TempDir()
+	locked := filepath.Join(dir, "locked")
+	os.Mkdir(locked, 0o755)
+	os.WriteFile(filepath.Join(locked, "a.pdf"), []byte("x"), 0o644)
+	os.Chmod(locked, 0)
+	defer os.Chmod(locked, 0o755)
+	path := filepath.Join(dir, "c.yaml")
+	os.WriteFile(path, []byte("prompt: hi\nfixture: locked\ngraders: [latency]\n"), 0o644)
+
+	_, err := LoadCase(path)
+
+	if err == nil || strings.Contains(err.Error(), "is empty") || !strings.Contains(err.Error(), `fixture "`+locked+`": `) {
+		t.Fatalf("err = %v", err)
 	}
 }
