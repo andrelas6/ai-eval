@@ -31,8 +31,10 @@ type Output struct {
 }
 
 type Trace struct {
-	Turns []Turn        `json:"turns"`
-	Wall  time.Duration `json:"wall_ns"`
+	Turns  []Turn        `json:"turns"`
+	Wall   time.Duration `json:"wall_ns"`
+	Tokens int           `json:"tokens"`
+	Cost   float64       `json:"cost"`
 }
 
 type Turn struct {

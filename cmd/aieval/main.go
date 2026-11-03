@@ -64,7 +64,7 @@ func main() {
 
 func realTarget(agent, model, host string, skillDirs []string) target.Target {
 	if agent == "pi" {
-		return target.Pi{Model: model, Skills: skillDirs}
+		return target.Pi{Bin: "pi", Model: model, Skills: skillDirs}
 	}
 	return target.Ollama{Client: &ollama.Client{Host: host, HTTP: &http.Client{}}, Model: model}
 }
@@ -92,6 +92,13 @@ func (a app) run(ctx context.Context, args []string) error {
 	names := splitList(*models)
 	if len(names) == 0 {
 		return errors.New("-models is required, e.g. -models gpt-oss:20b")
+	}
+	if *agent == "pi" {
+		for _, m := range names {
+			if provider, id, ok := strings.Cut(m, "/"); !ok || provider == "" || id == "" {
+				return fmt.Errorf("-models value %q must be written provider/model, e.g. ollama/gpt-oss:20b", m)
+			}
+		}
 	}
 	if len(sets) > 0 && *agent == "ollama" {
 		return errors.New("-skills only works with -agent pi")
@@ -207,7 +214,11 @@ func skillDirs(sets skillSets, suite string) ([][]string, error) {
 			if _, err := os.Stat(file); err != nil {
 				return nil, fmt.Errorf("skill %q: no %s", name, file)
 			}
-			dirs = append(dirs, dir)
+			abs, err := filepath.Abs(dir)
+			if err != nil {
+				return nil, err
+			}
+			dirs = append(dirs, abs)
 		}
 		all = append(all, dirs)
 	}

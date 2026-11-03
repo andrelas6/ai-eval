@@ -126,7 +126,7 @@ func TestRunRejectsSkillsWithOllama(t *testing.T) {
 func TestRunFailsWhenSkillFileIsMissing(t *testing.T) {
 	factory := &fakeFactory{}
 	suite := writeSuite(t)
-	_, _, err := execute(t, factory, "-agent", "pi", "-models", "a", "-skills", "x,ghost", suite)
+	_, _, err := execute(t, factory, "-agent", "pi", "-models", "p/a", "-skills", "x,ghost", suite)
 	if err == nil || !strings.Contains(err.Error(), filepath.Join(suite, "skills", "ghost", "SKILL.md")) {
 		t.Fatalf("err = %v", err)
 	}
@@ -141,16 +141,16 @@ func TestRunFailsWhenSkillFileIsMissing(t *testing.T) {
 func TestRunBuildsEveryModelAndSkillSet(t *testing.T) {
 	factory := &fakeFactory{}
 	suite := writeSuite(t)
-	stdout, _, err := execute(t, factory, "-agent", "pi", "-models", "a,b", "-skills", "none", "-skills", "x", suite)
+	stdout, _, err := execute(t, factory, "-agent", "pi", "-models", "p/a,p/b", "-skills", "none", "-skills", "x", suite)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	want := []factoryCall{
-		{"pi", "a", nil},
-		{"pi", "a", []string{filepath.Join(suite, "skills", "x")}},
-		{"pi", "b", nil},
-		{"pi", "b", []string{filepath.Join(suite, "skills", "x")}},
+		{"pi", "p/a", nil},
+		{"pi", "p/a", []string{filepath.Join(suite, "skills", "x")}},
+		{"pi", "p/b", nil},
+		{"pi", "p/b", []string{filepath.Join(suite, "skills", "x")}},
 	}
 	if len(factory.calls) != len(want) {
 		t.Fatalf("calls = %v", factory.calls)
@@ -160,7 +160,7 @@ func TestRunBuildsEveryModelAndSkillSet(t *testing.T) {
 			t.Errorf("call %d = %+v, want %+v", i, c, want[i])
 		}
 	}
-	for _, name := range []string{"pi@a", "pi+x@a", "pi@b", "pi+x@b"} {
+	for _, name := range []string{"pi@p/a", "pi+x@p/a", "pi@p/b", "pi+x@p/b"} {
 		if !strings.Contains(stdout, name) {
 			t.Errorf("table is missing %q:\n%s", name, stdout)
 		}
@@ -172,7 +172,7 @@ func TestRunBuildsEveryModelAndSkillSet(t *testing.T) {
 func TestRunJoinsSkillNamesWithCommas(t *testing.T) {
 	factory := &fakeFactory{}
 	suite := writeSuite(t)
-	if _, _, err := execute(t, factory, "-agent", "pi", "-models", "a", "-skills", "x,y", suite); err != nil {
+	if _, _, err := execute(t, factory, "-agent", "pi", "-models", "p/a", "-skills", "x,y", suite); err != nil {
 		t.Fatal(err)
 	}
 	want := []string{filepath.Join(suite, "skills", "x"), filepath.Join(suite, "skills", "y")}
@@ -214,7 +214,7 @@ func TestRunLoadsSuiteFolderInNameOrder(t *testing.T) {
 func TestRunAcceptsCaseFiles(t *testing.T) {
 	factory := &fakeFactory{}
 	suite := writeSuite(t)
-	stdout, _, err := execute(t, factory, "-agent", "pi", "-models", "m", "-skills", "x", filepath.Join(suite, "b.yaml"))
+	stdout, _, err := execute(t, factory, "-agent", "pi", "-models", "p/m", "-skills", "x", filepath.Join(suite, "b.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -276,7 +276,7 @@ func TestRunAcceptsRetriesFlag(t *testing.T) {
 func TestRunTreatsFolderAndFileOfOneSuiteAsOne(t *testing.T) {
 	factory := &fakeFactory{}
 	suite := writeSuite(t)
-	stdout, _, err := execute(t, factory, "-agent", "pi", "-models", "m", "-skills", "x", suite+"/", filepath.Join(suite, "a.yaml"))
+	stdout, _, err := execute(t, factory, "-agent", "pi", "-models", "p/m", "-skills", "x", suite+"/", filepath.Join(suite, "a.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -290,7 +290,7 @@ func TestRunTreatsFolderAndFileOfOneSuiteAsOne(t *testing.T) {
 func TestRunRefusesSkillNamesThatLeaveTheSkillsFolder(t *testing.T) {
 	for _, name := range []string{"../x", "x/y", "..", `a\b`} {
 		factory := &fakeFactory{}
-		_, _, err := execute(t, factory, "-agent", "pi", "-models", "m", "-skills", name, writeSuite(t))
+		_, _, err := execute(t, factory, "-agent", "pi", "-models", "p/m", "-skills", name, writeSuite(t))
 		if err == nil || !strings.Contains(err.Error(), "plain folder name") {
 			t.Errorf("%q: err = %v", name, err)
 		}
@@ -362,5 +362,48 @@ func TestRunRejectsNegativeRetries(t *testing.T) {
 	_, _, err := execute(t, &fakeFactory{}, "-models", "m", "-retries", "-1", writeSuite(t))
 	if err == nil || !strings.Contains(err.Error(), "-retries must be 0 or more") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+// TestRealTargetPiUsesThePiBinary checks the real Pi target is set up to start pi.
+// It asserts the Pi target's Bin is "pi".
+func TestRealTargetPiUsesThePiBinary(t *testing.T) {
+	pi := realTarget("pi", "ollama/m", "http://h", nil).(target.Pi)
+	if pi.Bin != "pi" {
+		t.Errorf("bin = %q", pi.Bin)
+	}
+}
+
+// TestRunGivesPiAbsoluteSkillDirs checks skill folders don't depend on where pi runs.
+// It asserts a relative suite path still gives skill dirs that are absolute.
+func TestRunGivesPiAbsoluteSkillDirs(t *testing.T) {
+	factory := &fakeFactory{}
+	suite := writeSuite(t)
+	wd, _ := os.Getwd()
+	rel, err := filepath.Rel(wd, suite)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := execute(t, factory, "-agent", "pi", "-models", "p/m", "-skills", "x", rel); err != nil {
+		t.Fatal(err)
+	}
+	if got := factory.calls[0].skills[0]; !filepath.IsAbs(got) || got != filepath.Join(suite, "skills", "x") {
+		t.Errorf("skill dir = %q", got)
+	}
+}
+
+// TestRunChecksPiModelsHaveAProvider checks -models values for -agent pi.
+// It asserts a value with no slash fails naming it, before any target is built, while ollama accepts it.
+func TestRunChecksPiModelsHaveAProvider(t *testing.T) {
+	factory := &fakeFactory{}
+	_, _, err := execute(t, factory, "-agent", "pi", "-models", "ollama/ok,gpt-oss:20b", writeSuite(t))
+	if err == nil || !strings.Contains(err.Error(), `"gpt-oss:20b"`) || !strings.Contains(err.Error(), "provider/model") {
+		t.Fatalf("err = %v", err)
+	}
+	if len(factory.calls) != 0 {
+		t.Errorf("calls = %v", factory.calls)
+	}
+	if _, _, err := execute(t, &fakeFactory{}, "-agent", "ollama", "-models", "gpt-oss:20b", writeSuite(t)); err != nil {
+		t.Errorf("ollama: %v", err)
 	}
 }
