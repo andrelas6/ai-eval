@@ -16,7 +16,14 @@ type Input struct {
 	System string
 	Prompt string
 	Tools  []tool.Tool
+	Dir    string
 }
+
+type RetryError struct {
+	Reason string
+}
+
+func (e RetryError) Error() string { return e.Reason }
 
 type Output struct {
 	Answer string `json:"answer"`

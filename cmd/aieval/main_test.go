@@ -315,3 +315,52 @@ func TestRealTarget(t *testing.T) {
 		t.Errorf("ollama = %+v", o)
 	}
 }
+
+type retryingTarget struct {
+	calls *int
+}
+
+func (r retryingTarget) Name() string { return "retrying" }
+
+func (r retryingTarget) Run(ctx context.Context, in target.Input) (target.Output, error) {
+	*r.calls++
+	return target.Output{}, target.RetryError{Reason: "try again"}
+}
+
+// TestRunWiresRetriesIntoTheRunner checks the -retries flag reaches the runner.
+// It asserts -retries 3 makes four tries of a target that always asks for a retry, and the
+// default of 2 makes three.
+func TestRunWiresRetriesIntoTheRunner(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		want int
+	}{
+		{[]string{"-retries", "3"}, 4},
+		{nil, 3},
+	} {
+		calls := 0
+		app := app{
+			stdout:     &bytes.Buffer{},
+			stderr:     &bytes.Buffer{},
+			build:      func(agent, model, host string, skillDirs []string) target.Target { return retryingTarget{&calls} },
+			resultsDir: filepath.Join(t.TempDir(), "results"),
+			now:        time.Now,
+		}
+		args := append(tc.args, "-models", "m", filepath.Join(writeSuite(t), "a.yaml"))
+		if err := app.run(context.Background(), args); err != nil {
+			t.Fatal(err)
+		}
+		if calls != tc.want {
+			t.Errorf("%v: calls = %d, want %d", tc.args, calls, tc.want)
+		}
+	}
+}
+
+// TestRunRejectsNegativeRetries checks -retries must not be below zero.
+// It asserts -retries -1 fails with "-retries must be 0 or more".
+func TestRunRejectsNegativeRetries(t *testing.T) {
+	_, _, err := execute(t, &fakeFactory{}, "-models", "m", "-retries", "-1", writeSuite(t))
+	if err == nil || !strings.Contains(err.Error(), "-retries must be 0 or more") {
+		t.Fatalf("err = %v", err)
+	}
+}

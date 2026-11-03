@@ -76,7 +76,7 @@ func (a app) run(ctx context.Context, args []string) error {
 	models := flags.String("models", "", "comma-separated models (required)")
 	host := flags.String("host", "http://192.168.2.156:11434", "Ollama base URL")
 	timeout := flags.Duration("timeout", 120*time.Second, "timeout per try")
-	flags.Int("retries", 2, "extra tries after a retryable failure")
+	retries := flags.Int("retries", 2, "extra tries after a retryable failure")
 	var sets skillSets
 	flags.Var(&sets, "skills", "skill set: none, or names joined with commas (repeatable)")
 	if err := flags.Parse(args); err != nil {
@@ -85,6 +85,9 @@ func (a app) run(ctx context.Context, args []string) error {
 
 	if *agent != "ollama" && *agent != "pi" {
 		return fmt.Errorf("-agent must be ollama|pi, got %q", *agent)
+	}
+	if *retries < 0 {
+		return errors.New("-retries must be 0 or more")
 	}
 	names := splitList(*models)
 	if len(names) == 0 {
@@ -124,6 +127,7 @@ func (a app) run(ctx context.Context, args []string) error {
 
 	runner := eval.Runner{
 		Timeout: *timeout,
+		Retries: *retries,
 		Logf: func(format string, args ...any) {
 			fmt.Fprintf(a.stderr, format+"\n", args...)
 		},
