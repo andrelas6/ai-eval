@@ -17,6 +17,7 @@ import (
 
 type Case struct {
 	ID      string
+	Dir     string
 	System  string
 	Prompt  string
 	Fixture string
@@ -57,7 +58,7 @@ func decodeCase(m map[string]any, defaultID, root string) (Case, error) {
 		}
 	}
 
-	c := Case{ID: defaultID, Runs: 1}
+	c := Case{ID: defaultID, Dir: root, Runs: 1}
 	var err error
 	if id, err := text(m, "id"); err != nil {
 		return c, err

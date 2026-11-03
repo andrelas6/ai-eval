@@ -132,6 +132,12 @@ func (a app) run(ctx context.Context, args []string) error {
 		}
 	}
 
+	start := a.now()
+	type runKey struct {
+		target, name string
+		n            int
+	}
+	saved := map[runKey]string{}
 	runner := eval.Runner{
 		Timeout: *timeout,
 		Retries: *retries,
@@ -140,13 +146,23 @@ func (a app) run(ctx context.Context, args []string) error {
 		},
 		OnResult: func(r eval.Result) {
 			fmt.Fprintf(a.stderr, "%s %s run %d: pass=%v %s\n", r.Target, r.Case, r.N, r.Pass, r.Err)
+			dir := outputDir(r, start)
+			if err := saveOutput(dir, r); err != nil {
+				fmt.Fprintf(a.stderr, "warning: saving output of %s %s run %d: %v\n", r.Target, r.Case, r.N, err)
+				return
+			}
+			saved[runKey{r.Target, r.Case, r.N}] = dir
 		},
 	}
 	results := runner.Run(ctx, targets, cases)
+	for i := range results {
+		r := results[i]
+		results[i].OutputDir = saved[runKey{r.Target, r.Case, r.N}]
+	}
 
 	fmt.Fprintln(a.stdout)
 	report.WriteTable(a.stdout, report.Summarize(results))
-	path, err := report.WriteJSON(a.resultsDir, results, a.now())
+	path, err := report.WriteJSON(a.resultsDir, results, start)
 	if err != nil {
 		return fmt.Errorf("write results: %w", err)
 	}

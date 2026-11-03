@@ -9,11 +9,13 @@ import (
 	"ai-eval/internal/eval"
 )
 
+const TimeFormat = "20060102-150405"
+
 func WriteJSON(dir string, results []eval.Result, now time.Time) (string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
-	path := filepath.Join(dir, now.Format("20060102-150405")+".json")
+	path := filepath.Join(dir, now.Format(TimeFormat)+".json")
 	b, err := json.MarshalIndent(results, "", "  ")
 	if err != nil {
 		return "", err
