@@ -295,3 +295,21 @@ func TestPiAllowsABoxWithoutNewFiles(t *testing.T) {
 		t.Fatalf("err = %v, files = %v, FilesErr = %q", err, out.Files, out.Trace.FilesErr)
 	}
 }
+
+// TestPiKeepsFilesAndRecordsErrorWhenNewFilesReturnsBoth checks a partial read.
+// It asserts the files stay in Output.Files and the error is also kept in Trace.FilesErr.
+func TestPiKeepsFilesAndRecordsErrorWhenNewFilesReturnsBoth(t *testing.T) {
+	var calls []processCall
+	var order []string
+	p := Pi{
+		Model:   "x/m",
+		Process: fakeProcess(&calls, []byte(readsStream()), nil),
+		Sandbox: boxWithFiles(&order, map[string][]byte{"a.md": []byte("a")}, errors.New("bad.md: denied")),
+	}
+
+	out, err := p.Run(context.Background(), Input{Prompt: "q"})
+
+	if err != nil || string(out.Files["a.md"]) != "a" || out.Trace.FilesErr != "bad.md: denied" {
+		t.Errorf("err = %v, files = %v, FilesErr = %q", err, out.Files, out.Trace.FilesErr)
+	}
+}

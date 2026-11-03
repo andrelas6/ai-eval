@@ -126,6 +126,24 @@ Once `skills/<name>/SKILL.md` exists in the suite, add `-skills <name>` to compa
 - **noexec.** On Linux, a `/tmp` mounted `noexec` stops skill scripts from running as `./x.sh`. `bash x.sh` still works.
 - **Small `/tmp`.** Set `TMPDIR` to a bigger folder.
 
+## Saved outputs
+
+Each run's answer is saved next to its case, as soon as the run ends:
+
+```text
+<suite>/outputs/<timestamp>/<target>/<case>/run-<n>/
+  answer.md     the model's final reply (every agent)
+  error.txt     only when the run errored
+  work/...      new files the model made in the sandbox (Pi only)
+```
+
+- **Final try only.** A retried run saves its last try.
+- **New files only.** `work/` holds files the model created. A fixture file it changed is not copied, and symlinks are skipped.
+- **Names.** `/` and `:` in the target name become `_`. The timestamp is the same one as the results file name.
+- **Git.** `evals/*/outputs/` is ignored.
+- **In the results JSON.** Each result has `suite` (the case's folder) and `output_dir` (its run folder, empty if saving failed).
+- **Warnings.** If saving fails, or Pi could not read the new files (`files_error` in the trace), a `warning:` line is printed to stderr and the eval carries on.
+
 ## Reading the results
 
 ```

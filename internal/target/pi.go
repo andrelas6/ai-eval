@@ -53,10 +53,9 @@ func (p Pi) Run(ctx context.Context, in Input) (out Output, err error) {
 	defer func() {
 		if box.NewFiles != nil {
 			files, filesErr := box.NewFiles()
+			out.Files = files
 			if filesErr != nil {
 				out.Trace.FilesErr = filesErr.Error()
-			} else {
-				out.Files = files
 			}
 		}
 		if box.Remove != nil {

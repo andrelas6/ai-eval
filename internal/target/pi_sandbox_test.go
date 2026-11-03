@@ -193,3 +193,135 @@ func TestMakeSandboxRefusesTwoSkillsWithTheSameName(t *testing.T) {
 		t.Errorf("err = %v, left = %v", err, left)
 	}
 }
+
+func sandboxFor(t *testing.T, fixture string) Box {
+	t.Helper()
+	box, err := makeSandbox(fixture, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { box.Remove() })
+	return box
+}
+
+// TestNewFilesReturnsFilesTheModelMade checks new files are found, nested ones included.
+// It asserts summary.csv and out/table.md come back with their bytes and nothing else does.
+func TestNewFilesReturnsFilesTheModelMade(t *testing.T) {
+	sandboxTempDir(t)
+	fixture := t.TempDir()
+	writeTree(t, fixture, map[string]string{"a.pdf": "pdf", "deep/b.pdf": "pdf2"})
+	box := sandboxFor(t, fixture)
+	writeTree(t, box.Work, map[string]string{"summary.csv": "a,b", "out/table.md": "| t |"})
+
+	files, err := box.NewFiles()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 2 || string(files["summary.csv"]) != "a,b" || string(files["out/table.md"]) != "| t |" {
+		t.Errorf("files = %v", files)
+	}
+}
+
+// TestNewFilesSkipsChangedFixtureFiles checks a fixture file the model changed.
+// It asserts the changed file is not returned, because only new paths count.
+func TestNewFilesSkipsChangedFixtureFiles(t *testing.T) {
+	sandboxTempDir(t)
+	fixture := t.TempDir()
+	writeTree(t, fixture, map[string]string{"a.pdf": "pdf"})
+	box := sandboxFor(t, fixture)
+	writeTree(t, box.Work, map[string]string{"a.pdf": "changed"})
+
+	files, err := box.NewFiles()
+
+	if err != nil || files != nil {
+		t.Fatalf("files = %v, err = %v", files, err)
+	}
+}
+
+// TestNewFilesIgnoresSymlinks checks a link in work/ that points outside.
+// It asserts the link is not returned, its unreadable target is never opened, and a linked folder is not walked.
+func TestNewFilesIgnoresSymlinks(t *testing.T) {
+	sandboxTempDir(t)
+	outside := t.TempDir()
+	secret := filepath.Join(outside, "secret.txt")
+	writeTree(t, outside, map[string]string{"secret.txt": "secret", "dir/inner.txt": "inner"})
+	if err := os.Chmod(secret, 0); err != nil {
+		t.Fatal(err)
+	}
+	box := sandboxFor(t, "")
+	writeTree(t, box.Work, map[string]string{"kept.md": "kept"})
+	if err := os.Symlink(secret, filepath.Join(box.Work, "key")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(outside, "dir"), filepath.Join(box.Work, "linked")); err != nil {
+		t.Fatal(err)
+	}
+
+	files, err := box.NewFiles()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 || string(files["kept.md"]) != "kept" {
+		t.Errorf("files = %v", files)
+	}
+}
+
+// TestNewFilesIsEmptyWhenNothingWasMade checks an untouched work folder.
+// It asserts no files come back, with a fixture and with an empty fixture string.
+func TestNewFilesIsEmptyWhenNothingWasMade(t *testing.T) {
+	sandboxTempDir(t)
+	fixture := t.TempDir()
+	writeTree(t, fixture, map[string]string{"a.pdf": "pdf"})
+	for _, dir := range []string{fixture} {
+		box := sandboxFor(t, dir)
+
+		files, err := box.NewFiles()
+
+		if err != nil || files != nil {
+			t.Errorf("fixture %q: files = %v, err = %v", dir, files, err)
+		}
+	}
+}
+
+// TestNewFilesWorksWithAnEmptyFixtureString checks a sandbox made without a fixture.
+// It asserts every file in work/ counts as new.
+func TestNewFilesWorksWithAnEmptyFixtureString(t *testing.T) {
+	sandboxTempDir(t)
+	box := sandboxFor(t, "")
+	writeTree(t, box.Work, map[string]string{"x.md": "x"})
+
+	files, err := box.NewFiles()
+
+	if err != nil || string(files["x.md"]) != "x" || len(files) != 1 {
+		t.Fatalf("files = %v, err = %v", files, err)
+	}
+}
+
+// TestNewFilesKeepsReadableFilesBesideAnUnreadableOne checks one bad file doesn't drop the rest.
+// It asserts the readable file comes back together with an error that names the unreadable one.
+func TestNewFilesKeepsReadableFilesBesideAnUnreadableOne(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root can read any file")
+	}
+	sandboxTempDir(t)
+	box := sandboxFor(t, "")
+	writeTree(t, box.Work, map[string]string{"good.md": "good", "bad.md": "bad", "locked/in.md": "in", "ok/fine.md": "fine"})
+	if err := os.Chmod(filepath.Join(box.Work, "bad.md"), 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(filepath.Join(box.Work, "locked"), 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(filepath.Join(box.Work, "locked"), 0o755) })
+
+	files, err := box.NewFiles()
+
+	if len(files) != 2 || string(files["good.md"]) != "good" || string(files["ok/fine.md"]) != "fine" {
+		t.Errorf("files = %v", files)
+	}
+	if err == nil || !strings.Contains(err.Error(), "bad.md") || !strings.Contains(err.Error(), "locked") {
+		t.Errorf("err = %v", err)
+	}
+}
