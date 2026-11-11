@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -46,6 +47,32 @@ func BuildGrid(results []eval.Result, axes []Axis, minPass float64) Grid {
 	for i := range grid.Cells {
 		grid.Cells[i] = make([]Cell, len(grid.Columns))
 	}
+	cellOf := map[string]*Cell{}
+	for _, axis := range axes {
+		row := slices.Index(grid.Rows, axis.Skills)
+		column := slices.Index(grid.Columns, axis.Model)
+		cellOf[axis.Target] = &grid.Cells[row][column]
+	}
+	walls := map[*Cell][]time.Duration{}
+	for _, res := range results {
+		cell, ok := cellOf[res.Target]
+		if !ok {
+			continue
+		}
+		cell.Runs++
+		cell.Cost += res.Output.Trace.Cost
+		if res.Err != "" {
+			continue
+		}
+		if res.Pass {
+			cell.Pass++
+		}
+		walls[cell] = append(walls[cell], res.Output.Trace.Wall)
+	}
+	for cell, w := range walls {
+		slices.Sort(w)
+		cell.P50 = percentile(w, 0.50)
+	}
 	return grid
 }
 
@@ -53,19 +80,32 @@ func WriteGrid(w io.Writer, grid Grid) {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	fmt.Fprintf(tw, "SKILLS \\ MODEL")
 	for _, model := range grid.Columns {
-		fmt.Fprintf(tw, "\t%s", model)
+		fmt.Fprintf(tw, "\t%s\t\t\t", model)
 	}
 	fmt.Fprintln(tw)
 	for i, row := range grid.Rows {
 		fmt.Fprint(tw, row)
 		for j := range grid.Columns {
-			fmt.Fprintf(tw, "\t%s", cellText(grid.Cells[i][j]))
+			fmt.Fprintf(tw, "\t%s", strings.Join(cellParts(grid.Cells[i][j]), "\t"))
 		}
 		fmt.Fprintln(tw)
 	}
 	tw.Flush()
 }
 
-func cellText(c Cell) string {
-	return "-"
+func cellParts(c Cell) []string {
+	if c.Runs == 0 {
+		return []string{"-", "", "", ""}
+	}
+	cost := "$0"
+	if c.Cost >= 0.0001 {
+		cost = fmt.Sprintf("$%.4f", c.Cost)
+	} else if c.Cost > 0 {
+		cost = "<$0.0001"
+	}
+	p50 := "-"
+	if c.P50 > 0 {
+		p50 = fmt.Sprintf("%.1fs", c.P50.Seconds())
+	}
+	return []string{fmt.Sprintf("%d/%d", c.Pass, c.Runs), fmt.Sprintf("%d%%", c.Pass*100/c.Runs), cost, p50}
 }

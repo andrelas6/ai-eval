@@ -431,10 +431,10 @@ func TestRunResolvesSymlinksInSkillDirs(t *testing.T) {
 	}
 }
 
-// TestRunPrintsGridFrame checks the grid under the table for two models and two skill sets.
+// TestRunPrintsGrid checks the grid under the table for two models and two skill sets.
 // It asserts the header names both models in -models order, the rows are none then x,
-// and every cell is "-" for now.
-func TestRunPrintsGridFrame(t *testing.T) {
+// and every cell shows the numbers of its two passing runs.
+func TestRunPrintsGrid(t *testing.T) {
 	stdout, _, err := execute(t, &fakeFactory{}, "-agent", "pi", "-models", "p/a,p/b", "-skills", "x", "-skills", "none", writeSuite(t))
 	if err != nil {
 		t.Fatal(err)
@@ -445,7 +445,9 @@ func TestRunPrintsGridFrame(t *testing.T) {
 			lines = append(lines, strings.Fields(line)...)
 		}
 	}
-	want := []string{"SKILLS", `\`, "MODEL", "p/a", "p/b", "none", "-", "-", "x", "-", "-"}
+	want := []string{"SKILLS", `\`, "MODEL", "p/a", "p/b",
+		"none", "2/2", "100%", "$0", "0.0s", "2/2", "100%", "$0", "0.0s",
+		"x", "2/2", "100%", "$0", "0.0s", "2/2", "100%", "$0", "0.0s"}
 	if !slices.Equal(lines, want) {
 		t.Errorf("grid fields = %q, want %q\n%s", lines, want, stdout)
 	}
