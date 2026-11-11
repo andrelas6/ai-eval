@@ -146,7 +146,7 @@ func TestDecodeCaseErrors(t *testing.T) {
 		{"prompt is a list", "prompt: [a, b]\ngraders: [latency]", `"prompt" must be text`},
 		{"tools not a list", "prompt: hi\nfixture: fixture\ntools: list_dir\ngraders: [latency]", `"tools" must be a list`},
 		{"unknown tool", "prompt: hi\nfixture: fixture\ntools: [rm_rf]\ngraders: [latency]", `unknown tool "rm_rf"`},
-		{"unknown grader", "prompt: hi\ngraders: [vibes]", `unknown grader "vibes" (known: contains, files, latency, not_contains, regex, tool_called)`},
+		{"unknown grader", "prompt: hi\ngraders: [vibes]", `unknown grader "vibes" (known: contains, files, latency, not_contains, number, regex, tool_called)`},
 		{"grader written as a list", "prompt: hi\ngraders:\n  - [files]", "each grader must be a name or name: settings"},
 		{"bad duration", "prompt: hi\ngraders:\n  - latency: { max: fast }", `latency: "max" must be a duration like 10s, got "fast"`},
 		{"latency unknown setting", "prompt: hi\ngraders:\n  - latency: { min: 1s }", `latency: unknown setting "min"`},
@@ -158,6 +158,22 @@ func TestDecodeCaseErrors(t *testing.T) {
 		{"contains blank item", "prompt: hi\ngraders:\n  - contains: [a, '  ']", "contains: give at least one text"},
 		{"contains empty item in a list", "prompt: hi\ngraders:\n  - contains: [a, '']", "contains: give at least one text"},
 		{"regex given a list", "prompt: hi\ngraders:\n  - regex: [a]", "regex: takes one pattern, not a list"},
+		{"number without settings", "prompt: hi\ngraders: [number]", "number: give settings"},
+		{"number as a list", "prompt: hi\ngraders:\n  - number: [1]", "number: give settings"},
+		{"number unknown setting", "prompt: hi\ngraders:\n  - number: {values: [1], tolerance: 1%}", `number: unknown setting "tolerance"`},
+		{"number without values", "prompt: hi\ngraders:\n  - number: {within: 1%}", `number: "values" needs at least one number`},
+		{"number empty values", "prompt: hi\ngraders:\n  - number: {values: []}", `number: "values" needs at least one number`},
+		{"number values not a list", "prompt: hi\ngraders:\n  - number: {values: 5}", `number: "values" must be a list`},
+		{"number value with no number", "prompt: hi\ngraders:\n  - number: {values: [abc]}", `number: value "abc" must hold exactly one number`},
+		{"number value with two numbers", "prompt: hi\ngraders:\n  - number: {values: [1 2]}", `number: value "1 2" must hold exactly one number`},
+		{"number value is a list", "prompt: hi\ngraders:\n  - number: {values: [[1]]}", `number: "values" must be a list of text`},
+		{"number within zero", "prompt: hi\ngraders:\n  - number: {values: [1], within: 0%}", `number: "within" must be a percent above 0 like 1%, got "0%"`},
+		{"number within negative", "prompt: hi\ngraders:\n  - number: {values: [1], within: -1%}", `number: "within" must be a percent above 0 like 1%, got "-1%"`},
+		{"number within no percent sign", "prompt: hi\ngraders:\n  - number: {values: [1], within: 0.01}", `number: "within" must be a percent above 0 like 1%, got "0.01"`},
+		{"number within not finite", "prompt: hi\ngraders:\n  - number: {values: [1], within: Inf%}", `number: "within" must be a percent above 0 like 1%, got "Inf%"`},
+		{"number within NaN", "prompt: hi\ngraders:\n  - number: {values: [1], within: NaN%}", `number: "within" must be a percent above 0 like 1%, got "NaN%"`},
+		{"number within a list", "prompt: hi\ngraders:\n  - number: {values: [1], within: [1%]}", `number: "within" must be text like 1%`},
+		{"number within too big", "prompt: hi\ngraders:\n  - number: {values: [1], within: 1e999%}", `number: "within" must be a percent above 0 like 1%`},
 		{"regex without pattern", "prompt: hi\ngraders: [regex]", "regex: give a pattern"},
 		{"regex bad pattern", "prompt: hi\ngraders:\n  - regex: '('", "regex: bad pattern"},
 		{"regex settings map", "prompt: hi\ngraders:\n  - regex: { pattern: a }", `regex: unknown setting "pattern"`},
@@ -204,7 +220,8 @@ func TestLoadCaseRejectsAnEmptyFixture(t *testing.T) {
 // TestFinancialReportCasesLoad checks the four shipped financial-report cases.
 // It asserts each file loads from a temp copy of the suite that has a dummy PDF, so the test
 // doesn't need the real PDFs, with fixture pdfs, one run, the latency grader, a not_contains
-// grader holding exactly the three refusal phrases, and a prompt that differs only in the metric.
+// grader holding exactly the three refusal phrases, a number grader holding exactly the confirmed
+// figures at the default 1%, and a prompt that differs only in the metric.
 func TestFinancialReportCasesLoad(t *testing.T) {
 	suite := t.TempDir()
 	os.Mkdir(filepath.Join(suite, "pdfs"), 0o755)
@@ -215,6 +232,12 @@ func TestFinancialReportCasesLoad(t *testing.T) {
 		"operating-margin.yaml": "operating margin",
 		"net-profit.yaml":       "net profit",
 		"debt.yaml":             "debt",
+	}
+	figures := map[string][]string{
+		"revenue.yaml":          {"416161 million", "391035 million", "383285 million"},
+		"operating-margin.yaml": {"31.97%", "31.51%", "29.82%"},
+		"net-profit.yaml":       {"112010 million", "93736 million", "96995 million"},
+		"debt.yaml":             {"90678 million", "96662 million"},
 	}
 	for file, metric := range ids {
 		b, err := os.ReadFile(filepath.Join("../../evals/financial-report", file))
@@ -231,12 +254,25 @@ func TestFinancialReportCasesLoad(t *testing.T) {
 		if c.ID != strings.TrimSuffix(file, ".yaml") || c.Runs != 1 || filepath.Base(c.Fixture) != "pdfs" {
 			t.Errorf("%s: case = %+v", file, c)
 		}
-		if got := graderNames(c); !slices.Equal(got, []string{"latency", "not_contains"}) {
+		if got := graderNames(c); !slices.Equal(got, []string{"latency", "not_contains", "number"}) {
 			t.Errorf("%s: graders = %v", file, got)
 		}
 		refusals := grader.Contains{Items: []string{"unable to read", "can't access", "cannot access"}, Absent: true}
 		if len(c.Graders) > 1 && !reflect.DeepEqual(c.Graders[1], refusals) {
 			t.Errorf("%s: not_contains = %+v", file, c.Graders[1])
+		}
+		if len(c.Graders) > 2 {
+			check, ok := c.Graders[2].(grader.NumberCheck)
+			if !ok {
+				t.Fatalf("%s: third grader = %T", file, c.Graders[2])
+			}
+			var written []string
+			for _, e := range check.Expected {
+				written = append(written, e.Text)
+			}
+			if !slices.Equal(written, figures[file]) || check.Within != 0.01 {
+				t.Errorf("%s: number = %+v", file, check)
+			}
 		}
 		if !strings.Contains(c.Prompt, "How has "+metric+" changed year over year?") {
 			t.Errorf("%s: prompt = %q", file, c.Prompt)
@@ -283,6 +319,34 @@ func TestDecodeCaseTextChecks(t *testing.T) {
 	}
 	if re := c.Graders[2].(grader.Regex).Pattern.String(); re != "(?i)total" {
 		t.Errorf("pattern = %q", re)
+	}
+}
+
+// TestDecodeCaseNumberCheck checks the number grader loads its settings.
+// It asserts each value is read with its scale and kind and keeps its text as written, and
+// within defaults to 1% and reads other percents.
+func TestDecodeCaseNumberCheck(t *testing.T) {
+	c, err := decode(t, "prompt: hi\ngraders:\n  - number: {values: [416161 million, 31.97%]}\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := grader.NumberCheck{
+		Expected: []grader.ExpectedNumber{
+			{Text: "416161 million", Number: grader.Number{Value: 416161e6, Kind: grader.PlainNumber}},
+			{Text: "31.97%", Number: grader.Number{Value: 31.97, Kind: grader.PercentNumber}},
+		},
+		Within: 0.01,
+	}
+	if !reflect.DeepEqual(c.Graders[0], want) {
+		t.Errorf("got %+v", c.Graders[0])
+	}
+
+	c, err = decode(t, "prompt: hi\ngraders:\n  - number: {values: [5], within: 0.5%}\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Graders[0].(grader.NumberCheck).Within; got != 0.005 {
+		t.Errorf("within = %v", got)
 	}
 }
 

@@ -6,3 +6,4 @@ runs: 1
 graders:
   - latency
   - not_contains: ["unable to read", "can't access", "cannot access"]
+  - number: {values: [416161 million, 391035 million, 383285 million]}

@@ -5,6 +5,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"ai-eval/internal/target"
 )
 
 // TestReadNumbersReadsFormats checks one number written in each supported style.
@@ -115,5 +117,67 @@ func TestReadNumbersIgnoresHugeNumbers(t *testing.T) {
 		if !slices.Equal(got, []Number{{5, PlainNumber}}) {
 			t.Errorf("got %+v", got)
 		}
+	}
+}
+
+// TestNumberCheckMatchesFigures checks the number grader against answers with figures in other styles.
+// Each row asserts 416161 million at 1% matches "$416.2 billion" and "416,161 million" but not
+// "$410 billion", a percent matches a close percent but not the same digits without a percent
+// sign, and a figure matches anywhere in the answer.
+func TestNumberCheckMatchesFigures(t *testing.T) {
+	revenue := NumberCheck{Expected: []ExpectedNumber{{"416161 million", Number{416161e6, PlainNumber}}}, Within: 0.01}
+	margin := NumberCheck{Expected: []ExpectedNumber{{"31.97%", Number{31.97, PercentNumber}}}, Within: 0.01}
+	tests := []struct {
+		name   string
+		check  NumberCheck
+		answer string
+		pass   bool
+	}{
+		{"billions", revenue, "Revenue was $416.2 billion.", true},
+		{"millions with commas", revenue, "Revenue: 416,161 million in 2025", true},
+		{"too far", revenue, "Revenue was $410 billion.", false},
+		{"no numbers", revenue, "I could not find it", false},
+		{"exactly on the edge", NumberCheck{Expected: []ExpectedNumber{{"2", Number{2, PlainNumber}}}, Within: 0.5}, "3", true},
+		{"just past the edge", NumberCheck{Expected: []ExpectedNumber{{"2", Number{2, PlainNumber}}}, Within: 0.5}, "3.01", false},
+		{"percent close", margin, "Margin was 32.0%.", true},
+		{"percent without sign", margin, "Margin was 31.97 of sales", false},
+		{"plain number is not a percent", margin, "Margin 31.97", false},
+		{"percent is not a plain number", NumberCheck{Expected: []ExpectedNumber{{"32", Number{32, PlainNumber}}}, Within: 0.01}, "32%", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s := tc.check.Grade(target.Output{Answer: tc.answer})
+			if s.Grader != "number" || s.Pass != tc.pass || (s.Value == 1) != tc.pass {
+				t.Fatalf("got %+v", s)
+			}
+		})
+	}
+}
+
+// TestNumberCheckNeedsEveryValue checks all expected figures are required.
+// It asserts the value is the share found, pass needs all of them, and the note names the
+// missing ones as written with the tolerance as a percent.
+func TestNumberCheckNeedsEveryValue(t *testing.T) {
+	g := NumberCheck{
+		Expected: []ExpectedNumber{
+			{"416161 million", Number{416161e6, PlainNumber}},
+			{"391035 million", Number{391035e6, PlainNumber}},
+			{"383285 million", Number{383285e6, PlainNumber}},
+		},
+		Within: 0.01,
+	}
+	s := g.Grade(target.Output{Answer: "2025: $416.2 billion"})
+	if s.Pass || s.Value != 1.0/3 || s.Note != "no number within 1% of: 391035 million, 383285 million" {
+		t.Fatalf("got %+v", s)
+	}
+
+	g.Within = 0.005
+	s = g.Grade(target.Output{Answer: "$416.2 billion, $391.0 billion, $383.3 billion"})
+	if !s.Pass || s.Value != 1 || s.Note != "" {
+		t.Fatalf("got %+v", s)
+	}
+	s = g.Grade(target.Output{Answer: "nothing"})
+	if s.Note != "no number within 0.5% of: 416161 million, 391035 million, 383285 million" {
+		t.Fatalf("note = %q", s.Note)
 	}
 }

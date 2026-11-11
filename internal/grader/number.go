@@ -3,8 +3,11 @@ package grader
 import (
 	"math"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
+
+	"ai-eval/internal/target"
 )
 
 type NumberKind int
@@ -90,4 +93,40 @@ func isDigit(c byte) bool {
 
 func isWordByte(c byte) bool {
 	return c == '_' || isDigit(c) || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
+}
+
+type ExpectedNumber struct {
+	Text   string
+	Number Number
+}
+
+type NumberCheck struct {
+	Expected []ExpectedNumber
+	Within   float64
+}
+
+func (NumberCheck) Name() string {
+	return "number"
+}
+
+func (g NumberCheck) Grade(out target.Output) Score {
+	s := Score{Grader: g.Name()}
+	answer := ReadNumbers(out.Answer)
+	var missing []string
+	for _, want := range g.Expected {
+		if !slices.ContainsFunc(answer, func(got Number) bool { return g.near(want.Number, got) }) {
+			missing = append(missing, want.Text)
+		}
+	}
+	s.Value = float64(len(g.Expected)-len(missing)) / float64(len(g.Expected))
+	s.Pass = len(missing) == 0
+	if len(missing) > 0 {
+		percent := strconv.FormatFloat(g.Within*100, 'g', 6, 64)
+		s.Note = "no number within " + percent + "% of: " + strings.Join(missing, ", ")
+	}
+	return s
+}
+
+func (g NumberCheck) near(want, got Number) bool {
+	return got.Kind == want.Kind && math.Abs(got.Value-want.Value) <= g.Within*math.Abs(want.Value)
 }

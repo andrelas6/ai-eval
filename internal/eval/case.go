@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -36,6 +37,7 @@ var graderBuilders = map[string]func(c Case, arg any) (grader.Grader, error){
 	"contains":     buildContains,
 	"not_contains": buildNotContains,
 	"regex":        buildRegex,
+	"number":       buildNumber,
 }
 
 func LoadCase(path string) (Case, error) {
@@ -260,6 +262,56 @@ func buildRegex(_ Case, arg any) (grader.Grader, error) {
 		return nil, fmt.Errorf("bad pattern: %v", err)
 	}
 	return grader.Regex{Pattern: re}, nil
+}
+
+func buildNumber(_ Case, arg any) (grader.Grader, error) {
+	settings, ok := arg.(map[string]any)
+	if !ok {
+		return nil, errors.New("give settings, e.g. number: {values: [416161 million], within: 1%}")
+	}
+	rest := maps.Clone(settings)
+	delete(rest, "values")
+	delete(rest, "within")
+	if len(rest) > 0 {
+		return nil, unknownSetting(rest)
+	}
+
+	rawValues, ok := settings["values"]
+	if !ok {
+		return nil, errors.New(`"values" needs at least one number, e.g. values: [416161 million]`)
+	}
+	items, ok := rawValues.([]any)
+	if !ok {
+		return nil, errors.New(`"values" must be a list, e.g. values: [416161 million]`)
+	}
+	if len(items) == 0 {
+		return nil, errors.New(`"values" needs at least one number, e.g. values: [416161 million]`)
+	}
+	check := grader.NumberCheck{Within: 0.01}
+	for _, item := range items {
+		written, ok := item.(string)
+		if !ok {
+			return nil, errors.New(`"values" must be a list of text`)
+		}
+		found := grader.ReadNumbers(written)
+		if len(found) != 1 {
+			return nil, fmt.Errorf("value %q must hold exactly one number", written)
+		}
+		check.Expected = append(check.Expected, grader.ExpectedNumber{Text: written, Number: found[0]})
+	}
+
+	if raw, ok := settings["within"]; ok {
+		written, ok := raw.(string)
+		if !ok {
+			return nil, errors.New(`"within" must be text like 1%`)
+		}
+		percent, err := strconv.ParseFloat(strings.TrimSuffix(written, "%"), 64)
+		if !strings.HasSuffix(written, "%") || err != nil || !(percent > 0) || math.IsInf(percent, 0) {
+			return nil, fmt.Errorf(`"within" must be a percent above 0 like 1%%, got %q`, written)
+		}
+		check.Within = percent / 100
+	}
+	return check, nil
 }
 
 func textItems(arg any) ([]string, error) {
