@@ -38,6 +38,7 @@ go test ./...
 | `-agent` | `ollama` | `ollama` or `pi` |
 | `-models` | *(required)* | Comma-separated model names. With `-agent pi` write `provider/model` |
 | `-skills` | *(none)* | A skill set: `none`, or names joined with commas. Repeat the flag for more sets. Names map to `<suite>/skills/<name>/SKILL.md`. Only with `-agent pi` |
+| `-min-pass` | *(none)* | A pass rate from 1 to 100, e.g. `90%` or `90`. Marks the cheapest grid cell that reaches it (see Reading the grid) |
 | `-timeout` | `120s` | Max time per try |
 | `-retries` | `2` | Extra tries after a retryable failure (a failed skill check is one) |
 | `-host` | `http://192.168.2.156:11434` | Ollama base URL |
@@ -173,7 +174,27 @@ qwen3-coder:30b  list-files  5/5   0    5/5    5/5      5/5          2.1     2.8
 | COST | Money spent over all tries, as reported by Pi. `<$0.0001` means above zero but less than that. `-` means no cost was reported (Ollama doesn't report one) |
 | SKILLS | Each offered skill with the runs that loaded it out of the runs that were offered it, e.g. `fin-report 3/3`. `-` means no skill was offered. Runs that errored before the skill check ran aren't counted |
 
-Rows are sorted by case, then PASS, then p50. Each run's full answer and tool calls are in `results/<timestamp>.json`. Read the failing answers there to check the scoring is fair. In that file, `cost` and `tokens` add up every try of a run, including retried ones, while `turns`, `answer` and the skills lists come from the last try only.
+Rows are sorted by case, then PASS, then p50. Each run's full answer and tool calls are in the `results` list of `results/<timestamp>.json`. Read the failing answers there to check the scoring is fair. In that file, `cost` and `tokens` add up every try of a run, including retried ones, while `turns`, `answer` and the skills lists come from the last try only.
+
+## Reading the grid
+
+Under the table, a grid shows every skill set against every model:
+
+```
+SKILLS \ MODEL  ollama/gpt-oss:20b           openrouter/deepseek/deepseek-v4-flash
+none            1/2    50%   $0     40.0s    2/2  100%  <$0.0001  35.0s
+fin-report      * 2/2  100%  $0     38.0s    2/2  100%  $0.0031   30.0s
+* cheapest at ≥ 90% pass: fin-report @ ollama/gpt-oss:20b
+```
+
+- **Rows and columns.** Rows are skill sets (`none` first, then in flag order). Columns are models. A target with no skills is the `none` row.
+- **Cell parts.** Passed runs out of all runs, the pass rate, the cost, and the median time (p50). Runs are added up over every case. `-` in the first part means the pair had no runs.
+- **Errors count as fails.** An errored run adds to the runs but not to the passes, and its time is left out of the p50. If every run errored, the p50 is `-`.
+- **Rate rounds down.** 2 of 3 prints `66%`, so `100%` always means every run passed.
+- **Cost.** `$0` means no cost was reported (Ollama never reports one) or it was zero. `<$0.0001` means above zero but less than that.
+- **The pick.** With `-min-pass`, the cells whose real pass rate is at least that value qualify (a cell exactly at it qualifies, the rounded percent is not used). The cheapest one wins, so a `$0` cell beats a paid one. On equal cost the lower p50 wins. The cell gets a `*` and the line under the grid names it. If no cell qualifies the line says `no cell reached 90% pass`. Without the flag there is no `*` and no line.
+
+The results JSON is an object `{results, grid}`. `results` is the list of runs. `grid` has `rows`, `columns`, `cells` (`runs`, `pass`, `cost`, `p50_ns`) and, only with `-min-pass`, `min_pass` and `pick` (`skills`, `model`, left out when no cell qualifies).
 
 ## Changing the test
 

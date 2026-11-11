@@ -509,3 +509,36 @@ func TestRunWritesResultsAndGridInJSON(t *testing.T) {
 		t.Errorf("file = %+v", file)
 	}
 }
+
+// TestRunPassesMinPassToTheGrid checks the flag value reaches the grid as a fraction.
+// It asserts -min-pass 90% and 90 both print the 90% pick line, and a run without the flag prints no pick line.
+func TestRunPassesMinPassToTheGrid(t *testing.T) {
+	for _, value := range []string{"90%", "90"} {
+		resultsDir := t.TempDir()
+		stdout, _, err := runWith(t, answerTarget("fake@m", "x"), resultsDir, "-models", "m", "-min-pass", value, writeSuite(t))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(stdout, "* cheapest at ≥ 90% pass: none @ m\n") {
+			t.Errorf("-min-pass %s: stdout:\n%s", value, stdout)
+		}
+		var file struct {
+			Grid struct {
+				MinPass float64 `json:"min_pass"`
+			} `json:"grid"`
+		}
+		if err := json.Unmarshal([]byte(readFile(t, filepath.Join(resultsDir, "20261103-100000.json"))), &file); err != nil {
+			t.Fatal(err)
+		}
+		if file.Grid.MinPass != 0.9 {
+			t.Errorf("-min-pass %s: min_pass = %v, want 0.9", value, file.Grid.MinPass)
+		}
+	}
+	stdout, _, err := execute(t, &fakeFactory{}, "-models", "m", writeSuite(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(stdout, "cheapest") || strings.Contains(stdout, "no cell reached") {
+		t.Errorf("stdout:\n%s", stdout)
+	}
+}

@@ -2,7 +2,9 @@ package report
 
 import (
 	"bytes"
+	"encoding/json"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -225,5 +227,124 @@ func TestWriteGridAlignsCellParts(t *testing.T) {
 	b := strings.Index(lines[2], "100%")
 	if a < 0 || a != b {
 		t.Errorf("percent columns %d and %d in %q", a, b, lines)
+	}
+}
+
+func gridLines(t *testing.T, results []eval.Result, minPass float64) []string {
+	t.Helper()
+	var out bytes.Buffer
+	WriteGrid(&out, BuildGrid(results, gridAxes(), minPass))
+	return strings.Split(strings.TrimRight(out.String(), "\n"), "\n")
+}
+
+// TestPickIsEmptyWithoutMinPass checks a run without -min-pass.
+// It asserts the grid has no pick and no min_pass in the JSON, and the printout has no star and no pick line.
+func TestPickIsEmptyWithoutMinPass(t *testing.T) {
+	results := []eval.Result{result("pi@p/a", "c", time.Second, true)}
+	grid := BuildGrid(results, gridAxes(), 0)
+	b, err := json.Marshal(grid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), "pick") || strings.Contains(string(b), "min_pass") {
+		t.Errorf("json = %s", b)
+	}
+	lines := gridLines(t, results, 0)
+	if len(lines) != 3 || strings.Contains(strings.Join(lines, "\n"), "*") {
+		t.Errorf("lines = %q", lines)
+	}
+}
+
+// TestPickTakesCheapestQualifyingCell checks the pick among cells above the threshold.
+// It asserts the cheapest passing cell is picked, a cheaper cell below the threshold is skipped,
+// the star is on the x / p/a cell and not on x / p/b, and the line under the grid names the skills and the model.
+func TestPickTakesCheapestQualifyingCell(t *testing.T) {
+	results := []eval.Result{
+		costed("pi@p/a", "c", time.Second, true, 0.05),
+		costed("pi+x@p/a", "c", time.Second, true, 0.02),
+		costed("pi@p/b", "c", time.Second, false, 0.001),
+		costed("pi+x@p/b", "c", time.Second, true, 0.03),
+	}
+	lines := gridLines(t, results, 0.9)
+	if len(lines) != 4 {
+		t.Fatalf("lines = %q", lines)
+	}
+	wantRow := []string{"x", "*", "1/1", "100%", "$0.0200", "1.0s", "1/1", "100%", "$0.0300", "1.0s"}
+	if !slices.Equal(strings.Fields(lines[2]), wantRow) || strings.Contains(lines[1], "*") {
+		t.Errorf("rows = %q", lines[1:3])
+	}
+	if lines[3] != "* cheapest at ≥ 90% pass: x @ p/a" {
+		t.Errorf("line = %q", lines[3])
+	}
+}
+
+// TestPickPrefersFreeCell checks a cell with no cost against a paid cell.
+// It asserts the $0 cell wins.
+func TestPickPrefersFreeCell(t *testing.T) {
+	results := []eval.Result{
+		costed("pi@p/a", "c", time.Second, true, 0.01),
+		costed("pi+x@p/b", "c", time.Second, true, 0),
+	}
+	lines := gridLines(t, results, 0.5)
+	if lines[len(lines)-1] != "* cheapest at ≥ 50% pass: x @ p/b" {
+		t.Errorf("lines = %q", lines)
+	}
+}
+
+// TestPickBreaksCostTieByP50 checks two cells with the same cost.
+// It asserts the cell with the lower median time wins, whichever comes first.
+func TestPickBreaksCostTieByP50(t *testing.T) {
+	results := []eval.Result{
+		costed("pi@p/a", "c", 5*time.Second, true, 0.01),
+		costed("pi+x@p/b", "c", 2*time.Second, true, 0.01),
+	}
+	lines := gridLines(t, results, 0.9)
+	if lines[len(lines)-1] != "* cheapest at ≥ 90% pass: x @ p/b" {
+		t.Errorf("lines = %q", lines)
+	}
+}
+
+// TestPickQualifiesExactlyAtThreshold checks the real pass fraction is used.
+// It asserts 9 of 10 qualifies at 90%, and 2 of 3 qualifies at 66.5% although it prints 66%, but not at 66.7%.
+func TestPickQualifiesExactlyAtThreshold(t *testing.T) {
+	var results []eval.Result
+	for i := 0; i < 10; i++ {
+		results = append(results, costed("pi@p/a", "c", time.Second, i != 0, 0.01))
+	}
+	lines := gridLines(t, results, 0.9)
+	if lines[len(lines)-1] != "* cheapest at ≥ 90% pass: none @ p/a" {
+		t.Errorf("lines = %q", lines)
+	}
+	two := []eval.Result{
+		costed("pi@p/a", "c", time.Second, true, 0.01),
+		costed("pi@p/a", "c", time.Second, true, 0.01),
+		costed("pi@p/a", "c", time.Second, false, 0.01),
+	}
+	if grid := BuildGrid(two, gridAxes(), 0.665); grid.Pick == nil {
+		t.Errorf("2 of 3 should qualify at 66.5%%")
+	}
+	if grid := BuildGrid(two, gridAxes(), 0.667); grid.Pick != nil {
+		t.Errorf("pick = %+v, want none at 66.7%%", grid.Pick)
+	}
+}
+
+// TestPickSaysWhenNoCellQualifies checks a threshold nobody reaches.
+// It asserts no star, a line saying no cell reached 90%, and no pick in the JSON.
+func TestPickSaysWhenNoCellQualifies(t *testing.T) {
+	results := []eval.Result{
+		result("pi@p/a", "c", time.Second, false),
+		failed("pi+x@p/a", "c"),
+	}
+	lines := gridLines(t, results, 0.9)
+	if strings.Contains(strings.Join(lines[:3], "\n"), "*") || lines[len(lines)-1] != "no cell reached 90% pass" {
+		t.Errorf("lines = %q", lines)
+	}
+	grid := BuildGrid(results, gridAxes(), 0.9)
+	b, err := json.Marshal(grid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), "pick") || !strings.Contains(string(b), `"min_pass":0.9`) {
+		t.Errorf("json = %s", b)
 	}
 }

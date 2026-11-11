@@ -24,10 +24,17 @@ type Cell struct {
 	P50  time.Duration `json:"p50_ns"`
 }
 
+type Pick struct {
+	Skills string `json:"skills"`
+	Model  string `json:"model"`
+}
+
 type Grid struct {
 	Rows    []string `json:"rows"`
 	Columns []string `json:"columns"`
 	Cells   [][]Cell `json:"cells"`
+	MinPass float64  `json:"min_pass,omitempty"`
+	Pick    *Pick    `json:"pick,omitempty"`
 }
 
 func BuildGrid(results []eval.Result, axes []Axis, minPass float64) Grid {
@@ -73,7 +80,34 @@ func BuildGrid(results []eval.Result, axes []Axis, minPass float64) Grid {
 		slices.Sort(w)
 		cell.P50 = percentile(w, 0.50)
 	}
+	grid.MinPass = minPass
+	if minPass > 0 {
+		grid.Pick = pickCell(grid, minPass)
+	}
 	return grid
+}
+
+func pickCell(grid Grid, minPass float64) *Pick {
+	bestRow, bestColumn := -1, -1
+	for i, row := range grid.Cells {
+		for j, c := range row {
+			if c.Runs == 0 || float64(c.Pass)/float64(c.Runs) < minPass {
+				continue
+			}
+			if bestRow < 0 {
+				bestRow, bestColumn = i, j
+				continue
+			}
+			best := grid.Cells[bestRow][bestColumn]
+			if c.Cost < best.Cost || (c.Cost == best.Cost && c.P50 < best.P50) {
+				bestRow, bestColumn = i, j
+			}
+		}
+	}
+	if bestRow < 0 {
+		return nil
+	}
+	return &Pick{Skills: grid.Rows[bestRow], Model: grid.Columns[bestColumn]}
 }
 
 func WriteGrid(w io.Writer, grid Grid) {
@@ -86,11 +120,21 @@ func WriteGrid(w io.Writer, grid Grid) {
 	for i, row := range grid.Rows {
 		fmt.Fprint(tw, row)
 		for j := range grid.Columns {
-			fmt.Fprintf(tw, "\t%s", strings.Join(cellParts(grid.Cells[i][j]), "\t"))
+			parts := cellParts(grid.Cells[i][j])
+			if grid.Pick != nil && grid.Pick.Skills == row && grid.Pick.Model == grid.Columns[j] {
+				parts[0] = "* " + parts[0]
+			}
+			fmt.Fprintf(tw, "\t%s", strings.Join(parts, "\t"))
 		}
 		fmt.Fprintln(tw)
 	}
 	tw.Flush()
+	percent := fmt.Sprintf("%.4g%%", grid.MinPass*100)
+	if grid.Pick != nil {
+		fmt.Fprintf(w, "* cheapest at ≥ %s pass: %s @ %s\n", percent, grid.Pick.Skills, grid.Pick.Model)
+	} else if grid.MinPass > 0 {
+		fmt.Fprintf(w, "no cell reached %s pass\n", percent)
+	}
 }
 
 func cellParts(c Cell) []string {
