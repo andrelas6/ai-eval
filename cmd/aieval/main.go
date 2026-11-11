@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -79,6 +80,15 @@ func (a app) run(ctx context.Context, args []string) error {
 	retries := flags.Int("retries", 2, "extra tries after a retryable failure")
 	var sets skillSets
 	flags.Var(&sets, "skills", "skill set: none, or names joined with commas (repeatable)")
+	var minPass float64
+	flags.Func("min-pass", "pass rate a grid cell must reach to be picked, 1 to 100, e.g. 90%", func(value string) error {
+		rate, err := parseMinPass(value)
+		if err != nil {
+			return err
+		}
+		minPass = rate
+		return nil
+	})
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -126,9 +136,12 @@ func (a app) run(ctx context.Context, args []string) error {
 	}
 
 	var targets []target.Target
+	var axes []report.Axis
 	for _, model := range names {
-		for _, dir := range dirs {
-			targets = append(targets, a.build(*agent, model, *host, dir))
+		for i, dir := range dirs {
+			built := a.build(*agent, model, *host, dir)
+			targets = append(targets, built)
+			axes = append(axes, report.Axis{Target: built.Name(), Skills: skillLabel(sets, i), Model: model})
 		}
 	}
 
@@ -165,7 +178,10 @@ func (a app) run(ctx context.Context, args []string) error {
 
 	fmt.Fprintln(a.stdout)
 	report.WriteTable(a.stdout, report.Summarize(results))
-	path, err := report.WriteJSON(a.resultsDir, results, start)
+	grid := report.BuildGrid(results, axes, minPass)
+	fmt.Fprintln(a.stdout)
+	report.WriteGrid(a.stdout, grid)
+	path, err := report.WriteJSON(a.resultsDir, results, grid, start)
 	if err != nil {
 		return fmt.Errorf("write results: %w", err)
 	}
@@ -246,6 +262,21 @@ func skillDirs(sets skillSets, suite string) ([][]string, error) {
 		all = append(all, dirs)
 	}
 	return all, nil
+}
+
+func skillLabel(sets skillSets, i int) string {
+	if i >= len(sets) || len(sets[i]) == 0 {
+		return "none"
+	}
+	return strings.Join(sets[i], ",")
+}
+
+func parseMinPass(value string) (float64, error) {
+	number, err := strconv.ParseFloat(strings.TrimSuffix(strings.TrimSpace(value), "%"), 64)
+	if err != nil || !(number >= 1 && number <= 100) {
+		return 0, errors.New("must be a number from 1 to 100, e.g. 90% or 90")
+	}
+	return number / 100, nil
 }
 
 func splitList(s string) []string {

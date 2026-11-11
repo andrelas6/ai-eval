@@ -110,16 +110,18 @@ func TestWriteTable(t *testing.T) {
 	}
 }
 
-// TestWriteJSON checks the full results are saved for reading failures later.
+// TestWriteJSON checks the full results and the grid are saved for reading failures later.
 // It asserts the file lands in the given folder (created if missing) named after the time,
-// and reading it back gives the same results, trace included.
+// and reading it back gives an object whose results match the input, trace included, and whose grid matches too.
 func TestWriteJSON(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "results")
 	results := []eval.Result{result("m1", "c1", time.Second, true, score("files", 1, true))}
 	results[0].Output.Answer = "README.md"
 	results[0].Output.Trace.Turns[0].ToolCalls = []target.ToolCall{{Name: "list_dir", Args: map[string]any{"path": "."}, Result: "README.md"}}
 
-	path, err := WriteJSON(dir, results, time.Date(2026, 10, 10, 9, 30, 5, 0, time.UTC))
+	grid := Grid{Rows: []string{"none"}, Columns: []string{"m1"}, Cells: [][]Cell{{{}}}}
+
+	path, err := WriteJSON(dir, results, grid, time.Date(2026, 10, 10, 9, 30, 5, 0, time.UTC))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,12 +130,18 @@ func TestWriteJSON(t *testing.T) {
 	}
 
 	b, _ := os.ReadFile(path)
-	var back []eval.Result
+	var back struct {
+		Results []eval.Result `json:"results"`
+		Grid    Grid          `json:"grid"`
+	}
 	if err := json.Unmarshal(b, &back); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(back, results) {
-		t.Errorf("round trip:\n got  %+v\n want %+v", back, results)
+	if !reflect.DeepEqual(back.Results, results) {
+		t.Errorf("round trip:\n got  %+v\n want %+v", back.Results, results)
+	}
+	if !reflect.DeepEqual(back.Grid, grid) {
+		t.Errorf("grid:\n got  %+v\n want %+v", back.Grid, grid)
 	}
 }
 

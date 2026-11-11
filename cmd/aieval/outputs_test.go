@@ -166,14 +166,17 @@ func TestRunRecordsOutputDirInJSON(t *testing.T) {
 	if _, _, err := runWith(t, answerTarget("fake@m", "x"), resultsDir, "-models", "m", suite); err != nil {
 		t.Fatal(err)
 	}
-	var results []struct {
-		Case      string `json:"case"`
-		Suite     string `json:"suite"`
-		OutputDir string `json:"output_dir"`
+	var file struct {
+		Results []struct {
+			Case      string `json:"case"`
+			Suite     string `json:"suite"`
+			OutputDir string `json:"output_dir"`
+		} `json:"results"`
 	}
-	if err := json.Unmarshal([]byte(readFile(t, filepath.Join(resultsDir, "20261103-100000.json"))), &results); err != nil {
+	if err := json.Unmarshal([]byte(readFile(t, filepath.Join(resultsDir, "20261103-100000.json"))), &file); err != nil {
 		t.Fatal(err)
 	}
+	results := file.Results
 	if len(results) != 2 {
 		t.Fatalf("results = %v", results)
 	}
@@ -301,13 +304,15 @@ func TestRunContinuesWhenSaveFails(t *testing.T) {
 	if !strings.Contains(stderr, "warning") {
 		t.Errorf("stderr = %q", stderr)
 	}
-	var results []struct {
-		OutputDir string `json:"output_dir"`
+	var file struct {
+		Results []struct {
+			OutputDir string `json:"output_dir"`
+		} `json:"results"`
 	}
-	if err := json.Unmarshal([]byte(readFile(t, filepath.Join(resultsDir, "20261103-100000.json"))), &results); err != nil {
+	if err := json.Unmarshal([]byte(readFile(t, filepath.Join(resultsDir, "20261103-100000.json"))), &file); err != nil {
 		t.Fatal(err)
 	}
-	for _, r := range results {
+	for _, r := range file.Results {
 		if r.OutputDir != "" {
 			t.Errorf("output_dir = %q", r.OutputDir)
 		}
