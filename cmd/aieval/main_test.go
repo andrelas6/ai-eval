@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -427,5 +428,117 @@ func TestRunResolvesSymlinksInSkillDirs(t *testing.T) {
 	}
 	if got := factory.calls[0].skills[0]; got != filepath.Join(suite, "skills", "x") {
 		t.Errorf("skill dir = %q", got)
+	}
+}
+
+// TestRunPrintsGrid checks the grid under the table for two models and two skill sets.
+// It asserts the header names both models in -models order, the rows are none then x,
+// and every cell shows the numbers of its two passing runs.
+func TestRunPrintsGrid(t *testing.T) {
+	stdout, _, err := execute(t, &fakeFactory{}, "-agent", "pi", "-models", "p/a,p/b", "-skills", "x", "-skills", "none", writeSuite(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lines []string
+	for _, line := range strings.Split(stdout, "\n") {
+		if strings.HasPrefix(line, "SKILLS") || strings.HasPrefix(line, "none") || strings.HasPrefix(line, "x ") {
+			lines = append(lines, strings.Fields(line)...)
+		}
+	}
+	want := []string{"SKILLS", `\`, "MODEL", "p/a", "p/b",
+		"none", "2/2", "100%", "$0", "0.0s", "2/2", "100%", "$0", "0.0s",
+		"x", "2/2", "100%", "$0", "0.0s", "2/2", "100%", "$0", "0.0s"}
+	if !slices.Equal(lines, want) {
+		t.Errorf("grid fields = %q, want %q\n%s", lines, want, stdout)
+	}
+}
+
+// TestRunPrintsGridForOllama checks a run without skills.
+// It asserts the grid has one none row.
+func TestRunPrintsGridForOllama(t *testing.T) {
+	stdout, _, err := execute(t, &fakeFactory{}, "-models", "m", writeSuite(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stdout, "SKILLS \\ MODEL") || strings.Count(stdout, "\nnone") != 1 {
+		t.Errorf("stdout:\n%s", stdout)
+	}
+}
+
+// TestRunAcceptsMinPassWithOrWithoutPercent checks both spellings of -min-pass.
+// It asserts 90%, 90 and the edges 1 and 100 are accepted.
+func TestRunAcceptsMinPassWithOrWithoutPercent(t *testing.T) {
+	for _, value := range []string{"90%", "90", "100", "1"} {
+		if _, _, err := execute(t, &fakeFactory{}, "-models", "m", "-min-pass", value, writeSuite(t)); err != nil {
+			t.Errorf("-min-pass %s: %v", value, err)
+		}
+	}
+}
+
+// TestRunRefusesBadMinPass checks -min-pass must be a number from 1 to 100.
+// It asserts 0, 150, abc, NaN, a lone percent sign and a negative number fail, and the flag name appears once in the message.
+func TestRunRefusesBadMinPass(t *testing.T) {
+	for _, value := range []string{"0", "150", "abc", "%", "-5", "NaN", "nan", "NaN%"} {
+		_, stderr, err := execute(t, &fakeFactory{}, "-models", "m", "-min-pass", value, writeSuite(t))
+		if err == nil || !strings.Contains(stderr, "invalid value") || !strings.Contains(stderr, "must be a number from 1 to 100") || strings.Contains(stderr, "-min-pass must be") {
+			t.Errorf("-min-pass %s: err = %v, stderr = %q", value, err, stderr)
+		}
+	}
+}
+
+// TestRunWritesResultsAndGridInJSON checks the shape of the results file.
+// It asserts the file is an object with the results and a grid holding rows and columns.
+func TestRunWritesResultsAndGridInJSON(t *testing.T) {
+	resultsDir := t.TempDir()
+	if _, _, err := runWith(t, answerTarget("fake@m", "x"), resultsDir, "-models", "m", writeSuite(t)); err != nil {
+		t.Fatal(err)
+	}
+	var file struct {
+		Results []struct {
+			Case string `json:"case"`
+		} `json:"results"`
+		Grid struct {
+			Rows    []string `json:"rows"`
+			Columns []string `json:"columns"`
+		} `json:"grid"`
+	}
+	if err := json.Unmarshal([]byte(readFile(t, filepath.Join(resultsDir, "20261103-100000.json"))), &file); err != nil {
+		t.Fatal(err)
+	}
+	if len(file.Results) != 2 || !slices.Equal(file.Grid.Rows, []string{"none"}) || !slices.Equal(file.Grid.Columns, []string{"m"}) {
+		t.Errorf("file = %+v", file)
+	}
+}
+
+// TestRunPassesMinPassToTheGrid checks the flag value reaches the grid as a fraction.
+// It asserts -min-pass 90% and 90 both print the 90% pick line, and a run without the flag prints no pick line.
+func TestRunPassesMinPassToTheGrid(t *testing.T) {
+	for _, value := range []string{"90%", "90"} {
+		resultsDir := t.TempDir()
+		stdout, _, err := runWith(t, answerTarget("fake@m", "x"), resultsDir, "-models", "m", "-min-pass", value, writeSuite(t))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(stdout, "* cheapest at ≥ 90% pass: none @ m\n") {
+			t.Errorf("-min-pass %s: stdout:\n%s", value, stdout)
+		}
+		var file struct {
+			Grid struct {
+				MinPass float64 `json:"min_pass"`
+			} `json:"grid"`
+		}
+		if err := json.Unmarshal([]byte(readFile(t, filepath.Join(resultsDir, "20261103-100000.json"))), &file); err != nil {
+			t.Fatal(err)
+		}
+		if file.Grid.MinPass != 0.9 {
+			t.Errorf("-min-pass %s: min_pass = %v, want 0.9", value, file.Grid.MinPass)
+		}
+	}
+	stdout, _, err := execute(t, &fakeFactory{}, "-models", "m", writeSuite(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(stdout, "cheapest") || strings.Contains(stdout, "no cell reached") {
+		t.Errorf("stdout:\n%s", stdout)
 	}
 }
