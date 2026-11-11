@@ -5,3 +5,4 @@ fixture: pdfs
 runs: 1
 graders:
   - latency
+  - not_contains: ["unable to read", "can't access", "cannot access"]
