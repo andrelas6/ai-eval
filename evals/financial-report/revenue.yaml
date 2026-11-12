@@ -1,7 +1,9 @@
 # How does revenue change from one year to the next, according to the PDFs?
 id: revenue
-prompt: Using the financial report PDFs in the current directory, answer this question. How has revenue changed year over year? Give the revenue for each year and the change between years.
+prompt: Using the financial report PDFs in the current directory, answer this question. How has revenue changed year over year? Give the revenue for each year and the change between years. Write every amount with its unit, for example $12.3 billion or 12,345 million, not a bare figure from a table.
 fixture: pdfs
 runs: 1
 graders:
   - latency
+  - not_contains: ["unable to read", "can't access", "cannot access"]
+  - number: {values: [416161 million, 391035 million, 383285 million]}

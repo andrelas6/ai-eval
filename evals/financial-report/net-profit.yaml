@@ -1,7 +1,9 @@
 # How does net profit change from one year to the next, according to the PDFs?
 id: net-profit
-prompt: Using the financial report PDFs in the current directory, answer this question. How has net profit changed year over year? Give the net profit for each year and the change between years.
+prompt: Using the financial report PDFs in the current directory, answer this question. How has net profit changed year over year? Give the net profit for each year and the change between years. Write every amount with its unit, for example $12.3 billion or 12,345 million, not a bare figure from a table.
 fixture: pdfs
 runs: 1
 graders:
   - latency
+  - not_contains: ["unable to read", "can't access", "cannot access"]
+  - number: {values: [112010 million, 93736 million, 96995 million]}

@@ -1,7 +1,9 @@
-# How does debt change from one year to the next, according to the PDFs?
+# How does total term debt change from one year to the next, according to the PDFs?
 id: debt
-prompt: Using the financial report PDFs in the current directory, answer this question. How has debt changed year over year? Give the debt for each year and the change between years.
+prompt: Using the financial report PDFs in the current directory, answer this question. How has total term debt changed year over year? Give the total term debt for each year and the change between years. Write every amount with its unit, for example $12.3 billion or 12,345 million, not a bare figure from a table.
 fixture: pdfs
 runs: 1
 graders:
   - latency
+  - not_contains: ["unable to read", "can't access", "cannot access"]
+  - number: {values: [90678 million, 96662 million]}
