@@ -146,7 +146,7 @@ func TestDecodeCaseErrors(t *testing.T) {
 		{"prompt is a list", "prompt: [a, b]\ngraders: [latency]", `"prompt" must be text`},
 		{"tools not a list", "prompt: hi\nfixture: fixture\ntools: list_dir\ngraders: [latency]", `"tools" must be a list`},
 		{"unknown tool", "prompt: hi\nfixture: fixture\ntools: [rm_rf]\ngraders: [latency]", `unknown tool "rm_rf"`},
-		{"unknown grader", "prompt: hi\ngraders: [vibes]", `unknown grader "vibes" (known: contains, files, latency, not_contains, number, regex, tool_called)`},
+		{"unknown grader", "prompt: hi\ngraders: [vibes]", `unknown grader "vibes" (known: contains, file_contains, file_exists, files, latency, not_contains, number, regex, tool_called)`},
 		{"grader written as a list", "prompt: hi\ngraders:\n  - [files]", "each grader must be a name or name: settings"},
 		{"bad duration", "prompt: hi\ngraders:\n  - latency: { max: fast }", `latency: "max" must be a duration like 10s, got "fast"`},
 		{"latency unknown setting", "prompt: hi\ngraders:\n  - latency: { min: 1s }", `latency: unknown setting "min"`},
@@ -174,6 +174,20 @@ func TestDecodeCaseErrors(t *testing.T) {
 		{"number within NaN", "prompt: hi\ngraders:\n  - number: {values: [1], within: NaN%}", `number: "within" must be a percent above 0 like 1%, got "NaN%"`},
 		{"number within a list", "prompt: hi\ngraders:\n  - number: {values: [1], within: [1%]}", `number: "within" must be text like 1%`},
 		{"number within too big", "prompt: hi\ngraders:\n  - number: {values: [1], within: 1e999%}", `number: "within" must be a percent above 0 like 1%`},
+		{"file_exists without pattern", "prompt: hi\ngraders: [file_exists]", "file_exists: give a pattern"},
+		{"file_exists blank pattern", "prompt: hi\ngraders:\n  - file_exists: '  '", "file_exists: give a pattern"},
+		{"file_exists given a list", "prompt: hi\ngraders:\n  - file_exists: [a.md]", "file_exists: takes one pattern, not a list"},
+		{"file_exists given settings", "prompt: hi\ngraders:\n  - file_exists: {file: a.md}", `file_exists: unknown setting "file"`},
+		{"file_exists bad pattern", "prompt: hi\ngraders:\n  - file_exists: '[a'", "file_exists: bad pattern"},
+		{"file_contains without settings", "prompt: hi\ngraders: [file_contains]", "file_contains: give settings"},
+		{"file_contains as text", "prompt: hi\ngraders:\n  - file_contains: a.md", "file_contains: give settings"},
+		{"file_contains unknown setting", "prompt: hi\ngraders:\n  - file_contains: {file: a.md, text: x, path: b}", `file_contains: unknown setting "path"`},
+		{"file_contains without file", "prompt: hi\ngraders:\n  - file_contains: {text: [x]}", `file_contains: "file" needs a pattern`},
+		{"file_contains file is a list", "prompt: hi\ngraders:\n  - file_contains: {file: [a.md], text: [x]}", `file_contains: "file" needs a pattern`},
+		{"file_contains bad pattern", "prompt: hi\ngraders:\n  - file_contains: {file: '[a', text: [x]}", "file_contains: bad pattern"},
+		{"file_contains without text", "prompt: hi\ngraders:\n  - file_contains: {file: a.md}", "file_contains: give at least one text"},
+		{"file_contains blank text", "prompt: hi\ngraders:\n  - file_contains: {file: a.md, text: [x, ' ']}", "file_contains: give at least one text"},
+		{"file graders each listed once", "prompt: hi\ngraders:\n  - file_exists: a.md\n  - file_exists: b.md", `grader "file_exists" is listed twice`},
 		{"regex without pattern", "prompt: hi\ngraders: [regex]", "regex: give a pattern"},
 		{"regex bad pattern", "prompt: hi\ngraders:\n  - regex: '('", "regex: bad pattern"},
 		{"regex settings map", "prompt: hi\ngraders:\n  - regex: { pattern: a }", `regex: unknown setting "pattern"`},
@@ -352,6 +366,31 @@ func TestDecodeCaseNumberCheck(t *testing.T) {
 	}
 	if got := c.Graders[0].(grader.NumberCheck).Within; got != 0.005 {
 		t.Errorf("within = %v", got)
+	}
+}
+
+// TestDecodeCaseFileChecks checks the file graders load from a case.
+// It asserts both keep their patterns, file_contains takes its text as one string or a list,
+// and a case with no fixture still loads, so it works for targets that write no files.
+func TestDecodeCaseFileChecks(t *testing.T) {
+	c, err := decode(t, "prompt: hi\ngraders:\n  - file_exists: '*.md'\n  - file_contains: {file: report.md, text: [Revenue, 2025]}\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []grader.Grader{
+		grader.FileExists{Pattern: "*.md"},
+		grader.FileContains{Pattern: "report.md", Items: []string{"Revenue", "2025"}},
+	}
+	if !reflect.DeepEqual(c.Graders, want) {
+		t.Errorf("graders = %+v", c.Graders)
+	}
+
+	c, err = decode(t, "prompt: hi\ngraders:\n  - file_contains: {file: report.md, text: revenue}\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Graders[0].(grader.FileContains).Items; !slices.Equal(got, []string{"revenue"}) {
+		t.Errorf("items = %v", got)
 	}
 }
 
