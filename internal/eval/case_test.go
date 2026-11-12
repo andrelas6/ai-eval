@@ -221,7 +221,8 @@ func TestLoadCaseRejectsAnEmptyFixture(t *testing.T) {
 // It asserts each file loads from a temp copy of the suite that has a dummy PDF, so the test
 // doesn't need the real PDFs, with fixture pdfs, one run, the latency grader, a not_contains
 // grader holding exactly the three refusal phrases, a number grader holding exactly the confirmed
-// figures at the default 1%, and a prompt that differs only in the metric.
+// figures at the default 1%, and a prompt that differs only in the metric. The three money cases
+// must also ask for every amount with its unit, since a bare table figure reads as a plain number.
 func TestFinancialReportCasesLoad(t *testing.T) {
 	suite := t.TempDir()
 	os.Mkdir(filepath.Join(suite, "pdfs"), 0o755)
@@ -231,7 +232,7 @@ func TestFinancialReportCasesLoad(t *testing.T) {
 		"revenue.yaml":          "revenue",
 		"operating-margin.yaml": "operating margin",
 		"net-profit.yaml":       "net profit",
-		"debt.yaml":             "debt",
+		"debt.yaml":             "total term debt",
 	}
 	figures := map[string][]string{
 		"revenue.yaml":          {"416161 million", "391035 million", "383285 million"},
@@ -276,6 +277,10 @@ func TestFinancialReportCasesLoad(t *testing.T) {
 		}
 		if !strings.Contains(c.Prompt, "How has "+metric+" changed year over year?") {
 			t.Errorf("%s: prompt = %q", file, c.Prompt)
+		}
+		asksForUnits := strings.Contains(c.Prompt, "Write every amount with its unit")
+		if asksForUnits != (file != "operating-margin.yaml") {
+			t.Errorf("%s: asks for units = %v, prompt = %q", file, asksForUnits, c.Prompt)
 		}
 	}
 }
