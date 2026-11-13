@@ -6,6 +6,7 @@ import (
 	"maps"
 	"math"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -31,13 +32,15 @@ type Case struct {
 var knownFields = []string{"id", "system", "prompt", "fixture", "tools", "runs", "graders"}
 
 var graderBuilders = map[string]func(c Case, arg any) (grader.Grader, error){
-	"files":        buildFiles,
-	"tool_called":  buildToolCalled,
-	"latency":      buildLatency,
-	"contains":     buildContains,
-	"not_contains": buildNotContains,
-	"regex":        buildRegex,
-	"number":       buildNumber,
+	"files":         buildFiles,
+	"tool_called":   buildToolCalled,
+	"latency":       buildLatency,
+	"contains":      buildContains,
+	"not_contains":  buildNotContains,
+	"regex":         buildRegex,
+	"number":        buildNumber,
+	"file_exists":   buildFileExists,
+	"file_contains": buildFileContains,
 }
 
 func LoadCase(path string) (Case, error) {
@@ -312,6 +315,55 @@ func buildNumber(_ Case, arg any) (grader.Grader, error) {
 		check.Within = percent / 100
 	}
 	return check, nil
+}
+
+func buildFileExists(_ Case, arg any) (grader.Grader, error) {
+	switch v := arg.(type) {
+	case []any:
+		return nil, errors.New("takes one pattern, not a list")
+	case map[string]any:
+		return nil, unknownSetting(v)
+	}
+	pattern, _ := arg.(string)
+	if strings.TrimSpace(pattern) == "" {
+		return nil, errors.New("give a pattern, e.g. file_exists: report.md")
+	}
+	if err := checkFilePattern(pattern); err != nil {
+		return nil, err
+	}
+	return grader.FileExists{Pattern: pattern}, nil
+}
+
+func buildFileContains(_ Case, arg any) (grader.Grader, error) {
+	settings, ok := arg.(map[string]any)
+	if !ok {
+		return nil, errors.New("give settings, e.g. file_contains: {file: report.md, text: [revenue]}")
+	}
+	rest := maps.Clone(settings)
+	delete(rest, "file")
+	delete(rest, "text")
+	if len(rest) > 0 {
+		return nil, unknownSetting(rest)
+	}
+	pattern, _ := settings["file"].(string)
+	if strings.TrimSpace(pattern) == "" {
+		return nil, errors.New(`"file" needs a pattern, e.g. file: report.md`)
+	}
+	if err := checkFilePattern(pattern); err != nil {
+		return nil, err
+	}
+	items, err := textItems(settings["text"])
+	if err != nil {
+		return nil, err
+	}
+	return grader.FileContains{Pattern: pattern, Items: items}, nil
+}
+
+func checkFilePattern(pattern string) error {
+	if _, err := path.Match(pattern, "x"); err != nil {
+		return fmt.Errorf("bad pattern: %v", err)
+	}
+	return nil
 }
 
 func textItems(arg any) ([]string, error) {

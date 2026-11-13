@@ -196,6 +196,81 @@ fin-report      * 2/2  100%  $0     38.0s    2/2  100%  $0.0031   30.0s
 
 The results JSON is an object `{results, grid}`. `results` is the list of runs. `grid` has `rows`, `columns`, `cells` (`runs`, `pass`, `cost`, `p50_ns`) and, only with `-min-pass`, `min_pass` and `pick` (`skills`, `model`, left out when no cell qualifies).
 
+## Graders
+
+A case lists its graders under `graders:`. Each one is a name, or `name: settings`. Every grader gives a score with a `Value` (0 to 1), a `Pass` (true or false) and a `Note` that says why it failed. A run passes when every grader passes. A bad setting is refused when the case loads, with the grader name in the error, before any model is called.
+
+```yaml
+graders:
+  - latency: { max: 90s }
+  - not_contains: ["unable to read", "can't access", "cannot access"]
+  - contains: ["2025", "2024"]
+  - regex: '\|\s*2025\s*\|'
+  - number: { values: [416161 million, 391035 million], within: 1% }
+  - file_exists: report.md
+  - file_contains: { file: report.md, text: ["revenue"] }
+```
+
+**List each grader name once per case.** Listing the same name twice is refused: `grader "contains" is listed twice; list all the values in one contains`. The table and the grid show one column per grader name and count each run once per score, so two `number` graders would count twice per run. Put several values in one grader instead.
+
+| Grader | Passes when | Settings |
+|---|---|---|
+| `files` | The answer names every top-level entry of the fixture and no made-up filenames. `Value` is the share named | none. The case needs a `fixture` |
+| `tool_called` | The model called that tool at least once | the tool name, e.g. `tool_called: list_dir`. The case must offer it in `tools` |
+| `latency` | The run took no longer than `max`. With no `max` it always passes and only records the time | `max`, a duration like `10s` or `1m30s` |
+| `contains` | The answer holds every text, ignoring case | one text or a list |
+| `not_contains` | The answer holds none of the texts, ignoring case | one text or a list |
+| `regex` | The pattern matches anywhere in the answer | one pattern |
+| `number` | Every expected figure appears in the answer within a tolerance | `values` (a list) and `within` |
+| `file_exists` | A file the run created matches the pattern | one pattern |
+| `file_contains` | One matching file holds every text, ignoring case | `file` (a pattern) and `text` (one text or a list) |
+
+For the list graders, `Value` is the share of items that matched (for `not_contains`, the share that were absent), and `Pass` needs all of them. The `Note` names what is missing (`missing: 2025`) or found (`found: unable to read`).
+
+### contains and not_contains
+
+Plain text, case ignored. A single text can be written without the brackets: `not_contains: "can't access"`. Empty or blank items are refused. Use `not_contains` to catch refusals, so an answer like "I was unable to read the PDFs" stops passing.
+
+### regex
+
+The pattern is compiled when the case loads, so a typo fails before any run. It uses Go's RE2 syntax. It is case-sensitive unless the pattern starts with `(?i)`.
+
+**Write the pattern in single quotes.** Single quotes keep backslashes as written, so `'\|\s*2025\s*\|'` is the pattern `\|\s*2025\s*\|`. Double quotes drop the backslash before most characters (`\n` and `\t` become a newline and a tab), so `"\|\s*2025"` silently becomes `|s*2025`.
+
+### number
+
+`values` lists the figures the answer must contain, written the way you would write them. Each item must hold exactly one number. `within` is a relative tolerance in percent, written with `%` (default `1%`): a figure matches when `|answer - expected| <= within * |expected|`.
+
+The reader understands these forms, and an expected value and the answer are read the same way:
+
+- Plain numbers: `416161`, `416,161`, `1,234.5`, `-12`, years like `2025`.
+- Scales, with or without a space: `$416.2 billion`, `416,161 million`, `$416.2B`, `416.2bn`, `12 thousand`, `3k`, `1.5 trillion`. The scale is applied, so `416161 million` and `$416.2 billion` are the same figure. Scale words are `thousand`, `million`, `billion`, `trillion`, and the short forms `k`, `m`, `mn`, `b`, `bn`.
+- Percents: `31.97%`, `-3.5%`, `31.97 %`. A minus sign or a Unicode minus both work.
+
+Things to know:
+
+- **One-letter scales must touch the number.** `5m` is 5 million but `5 m` is 5, and `4 M&A deals` is 4. Longer scales can have a space.
+- **Words are kept whole.** `5 more` and `10 months` are 5 and 10, not millions. Digits glued to other letters (`10x`, `3rd`, `Q3`, `report2025.pdf`) are not read as numbers.
+- **A percent only matches a percent.** `31.97%` matches `32.0%` but not `31.97` written without a percent sign, and a plain figure never matches a percent.
+- **Bare table figures read as plain numbers.** A table in millions that shows `416,161` reads as 416161, not 416161 million, and fails. Ask for units in the prompt, for example "write every amount with its unit, like $12.3 billion".
+- **A wide `within` can let one answer number satisfy two expected values.** With `within: 10%`, a single `95` in the answer matches both `90` and `100`. Keep the tolerance small when expected values are close together.
+- **An expected `0` only matches exactly**, because the tolerance is a share of the expected value.
+- **Matches count anywhere in the answer**, so a year can match a figure: an expected plain `2030` (within 1%) is matched by the year `2025` in the text. Keep expected values distinctive.
+
+`Value` is the share of expected figures found. The note reads `no number within 1% of: 391035 million, 383285 million`, listing each missing figure as you wrote it. `within` must be above 0 and finite.
+
+### file_exists and file_contains
+
+These look at files the run created in its sandbox (see Soft sandbox), which are the same files saved under `work/`.
+
+- **Patterns** use Go's `path.Match`. `report.md` matches that exact name, and `*.md` matches any markdown file at the top level of the sandbox. `*` does not cross a folder, so `*.md` does not match `sub/x.md`; write `sub/*.md` for that. A bad pattern is refused when the case loads.
+- **Only new files count.** A fixture file the model edited is not seen, and neither are symlinks.
+- **Text matching is meant for text files.** `file_contains` compares lowercased file bytes with the texts, so binary files such as PDFs won't give useful matches.
+- **`file_contains` needs one file to hold everything.** With `*.md`, the texts can't be spread over two files. `Value` is the best single file's share of the texts. The note names what each matching file lacks, e.g. `a.md missing: 2025; b.md missing: Revenue`.
+- **No match.** The note lists up to five of the files that were written, sorted, e.g. `no file matches report.md; wrote: a.txt, b.txt, c.txt, d.txt, e.txt and 2 more`.
+- **Ollama writes no files.** Ollama targets only answer, so these graders fail with `the target wrote no files`. The case still loads. Use them with `-agent pi`.
+- **Unreadable files.** If Pi could not read the new files (the `files_error` warning), a grader that finds no match says `could not read the target's files: <error>` instead of blaming the model.
+
 ## Changing the test
 
 - **Different folder:** add or remove files in `evals/list-files/fixture/`. The expected answer is read from disk on every run.
